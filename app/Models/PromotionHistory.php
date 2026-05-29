@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Employee;
 
 class PromotionHistory extends Model
 {
@@ -12,4 +13,9 @@ class PromotionHistory extends Model
         'new_position',
         'promotion_date',
     ];
+
+    public function employee()
+    {
+        return $this->belongsTo(Employee::class);
+    }
 }
