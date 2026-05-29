@@ -43,6 +43,7 @@ class EmployeeController extends Controller
 
     public function store(Request $request)
     {
+
         $request->validate([
             'username' => 'required|string|unique:users,username',
             'email' => 'required|string|email|unique:users,email',
@@ -58,6 +59,14 @@ class EmployeeController extends Controller
             'department_id' => 'required|exists:departments,id',
             'date_hired' => 'required|date',
         ]);
+
+        $admin = request()->user();
+        if (!$admin || $admin->role !== 'hr_admin') {
+
+            return response()->json([
+                'message' => "Forbidden"
+            ], 403);
+        }
 
         $user = User::create([
             'username' => $request->username,
@@ -89,7 +98,7 @@ class EmployeeController extends Controller
 
     public function show(string $id)
     {
-        $employee = Employee::with(['user', 'department'])->findOrFail($id);
+        $employee = Employee::with(['user', 'department', 'promotion_history'])->findOrFail($id);
 
         return response()->json([
             'id' => $employee->id,
@@ -105,6 +114,7 @@ class EmployeeController extends Controller
             'position' => $employee->position,
             'department' => $employee->department->name,
             'date_hired' => $employee->date_hired,
+            'promotion_history' => $employee->promotionHistory,
             'is_active' => $employee->is_active,
         ]);
     }
@@ -136,6 +146,15 @@ class EmployeeController extends Controller
 
     public function destroy(string $id)
     {
+
+        $user = request()->user();
+
+        if (!$user || $user->role !== "hr_admin") {
+
+            return response()->json([
+                'message' => 'Forbidden'
+            ], 403);
+        }
         $employee = Employee::findOrFail($id);
 
         $employee->update(['is_active' => false]);
