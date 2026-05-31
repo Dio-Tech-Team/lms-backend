@@ -31,7 +31,7 @@ class Employee extends Model
         return $this->belongsTo(Department::class);
     }
 
-    public function promotionHistory()
+    public function promotion_history()
     {
         return $this->hasMany(PromotionHistory::class);
     }

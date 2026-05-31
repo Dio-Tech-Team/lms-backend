@@ -114,7 +114,7 @@ class EmployeeController extends Controller
             'position' => $employee->position,
             'department' => $employee->department->name,
             'date_hired' => $employee->date_hired,
-            'promotion_history' => $employee->promotionHistory,
+            'promotion_history' => $employee->promotion_history,
             'is_active' => $employee->is_active,
         ]);
     }
