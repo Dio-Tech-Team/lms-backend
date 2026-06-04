@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Department;
+
 use Illuminate\Http\Request;
 
 class DepartmentController extends Controller
@@ -11,7 +13,13 @@ class DepartmentController extends Controller
      */
     public function index()
     {
-        //
+
+        $departments = Department::where('is_active', true)->get();
+
+        return response()->json([
+            'message' => 'Departments retrieved successfully',
+            'data' => $departments
+        ], 200);
     }
 
     /**
@@ -19,7 +27,24 @@ class DepartmentController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'code' => 'required|string|max:10|unique:departments,code',
+            'is_active' => 'boolean'
+        ]);
+
+        $department = Department::create([
+            'name' => $request->name,
+            'code' => $request->code,
+            'is_active' => $request->is_active ?? true
+
+
+        ]);
+
+        return response()->json([
+            'message' => 'Department created successfully',
+            'data' => $department
+        ], 201);
     }
 
     /**
@@ -27,7 +52,12 @@ class DepartmentController extends Controller
      */
     public function show(string $id)
     {
-        //
+        $department = Department::findOrFail($id);
+
+        return response()->json([
+            'message' => 'Department retrieved successfully',
+            'data' => $department
+        ], 200);
     }
 
     /**
@@ -35,7 +65,20 @@ class DepartmentController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        //
+
+        $department = Department::findOrFail($id);
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'code' => 'sometimes|required|string|max:10|unique:departments,code,' . $id,
+            'is_active' => 'boolean'
+        ]);
+
+        $department->update($validated);
+
+        return response()->json([
+            'message' => 'Department updated successfully',
+            'data' => $department
+        ], 200);
     }
 
     /**
@@ -43,6 +86,11 @@ class DepartmentController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        $department = Department::findOrFail($id);
+        $department->update(['is_active' => false]);
+
+        return response()->json([
+            'message' => 'Department deactivated successfully'
+        ], 200);
     }
 }
