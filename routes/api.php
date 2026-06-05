@@ -6,10 +6,12 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\PromotionHistoryController;
+use App\Http\Controllers\LeaveConfigurationController;
 
 
 
 Route::post('/login', [AuthController::class, 'login']);
+// ->middleware('throttle:login'); // Limit to 5 attempts per minute
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -24,4 +26,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('employees/{employeeId}/promotions', [PromotionHistoryController::class, 'index']);
     Route::post('employees/{employeeId}/promotions', [PromotionHistoryController::class, 'store']);
     Route::delete('employees/{employeeId}/promotions/{promotionId}', [PromotionHistoryController::class, 'destroy']);
+
+
+    //Leave Configuration Routes
+    // Route::get('leave-configurations', [LeaveConfigurationController::class, 'index']);
+    // Route::post('leave-configurations', [LeaveConfigurationController::class, 'store']);
+    // Route::get('leave-configurations/{id}', [LeaveConfigurationController::class, 'show']);
+    // Route::put('leave-configurations/{id}', [LeaveConfigurationController::class, 'update']);
+    // Route::delete('leave-configurations/{id}', [LeaveConfigurationController::class, 'destroy']); 
+    Route::apiResource('leave-configurations', LeaveConfigurationController::class);
 });
