@@ -7,7 +7,7 @@ use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\PromotionHistoryController;
 use App\Http\Controllers\LeaveConfigurationController;
-
+use App\Http\Controllers\LeaveCreditController;
 
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -35,4 +35,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Route::put('leave-configurations/{id}', [LeaveConfigurationController::class, 'update']);
     // Route::delete('leave-configurations/{id}', [LeaveConfigurationController::class, 'destroy']); 
     Route::apiResource('leave-configurations', LeaveConfigurationController::class);
+
+    // Leave Credit Routes
+    Route::get('employees/{employeeId}/leave-credits', [LeaveCreditController::class, 'index']);
+    Route::post('employees/{employeeId}/leave-credits/initialize', [LeaveCreditController::class, 'initializeCredits']);
+    Route::put('employees/{employeeId}/leave-credits/{creditId}', [LeaveCreditController::class, 'update']);
 });
