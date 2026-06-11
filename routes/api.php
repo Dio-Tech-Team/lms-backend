@@ -8,6 +8,7 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\PromotionHistoryController;
 use App\Http\Controllers\LeaveConfigurationController;
 use App\Http\Controllers\LeaveCreditController;
+use App\Http\Controllers\LeaveRecordController;
 
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -40,4 +41,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('employees/{employeeId}/leave-credits', [LeaveCreditController::class, 'index']);
     Route::post('employees/{employeeId}/leave-credits/initialize', [LeaveCreditController::class, 'initializeCredits']);
     Route::put('employees/{employeeId}/leave-credits/{creditId}', [LeaveCreditController::class, 'update']);
+
+    // Leave Record Routes
+    // Leave Record Routes - HR can only view, update, delete
+    Route::get('leave-records', [LeaveRecordController::class, 'index']);
+    Route::get('leave-records/{id}', [LeaveRecordController::class, 'show']);
+    Route::put('leave-records/{id}', [LeaveRecordController::class, 'update']);
+    Route::delete('leave-records/{id}', [LeaveRecordController::class, 'destroy']);
 });
