@@ -9,6 +9,7 @@ use App\Http\Controllers\PromotionHistoryController;
 use App\Http\Controllers\LeaveConfigurationController;
 use App\Http\Controllers\LeaveCreditController;
 use App\Http\Controllers\LeaveRecordController;
+use App\Http\Controllers\LeaveApplicationController;
 
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -48,4 +49,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('leave-records/{id}', [LeaveRecordController::class, 'show']);
     Route::put('leave-records/{id}', [LeaveRecordController::class, 'update']);
     Route::delete('leave-records/{id}', [LeaveRecordController::class, 'destroy']);
+
+
+
+    // Leave Application Routes
+    Route::get('leave-applications', [LeaveApplicationController::class, 'index']);
+    Route::post('leave-applications', [LeaveApplicationController::class, 'store']);
+    Route::get('leave-applications/{id}', [LeaveApplicationController::class, 'show']);
+    Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
+    Route::post('leave-applications/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
 });

@@ -14,17 +14,17 @@ class LeaveConfigurationSeeder extends Seeder
     public function run(): void
     {
         $leaves = [
-            // [
-            //     'name' => 'Vacation Leave',
-            //     'code' => 'VL',
-            //     'application_to' => 'all',
-            //     'can_carry_over' => true,
-            //     'can_monetize' => true,
-            //     'fixed_days' => null,
-            //     'monthly_credit' => 1.25,
-            //     'credit_type' => 'monthly',
-            //     'description' => 'Leave for personal vacation and rest purposes'
-            // ],
+            [
+                'name' => 'Vacation Leave',
+                'code' => 'VL',
+                'application_to' => 'all',
+                'can_carry_over' => true,
+                'can_monetize' => true,
+                'fixed_days' => null,
+                'monthly_credit' => 1.25,
+                'credit_type' => 'monthly',
+                'description' => 'Leave for personal vacation and rest purposes'
+            ],
             [
                 'name'           => 'Sick Leave',
                 'code'           => 'SL',
