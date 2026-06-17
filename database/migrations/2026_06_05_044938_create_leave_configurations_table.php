@@ -22,6 +22,8 @@ return new class extends Migration
             $table->decimal('monthly_credit', 8, 2)->nullable();
             $table->enum('credit_type', ['fixed', 'monthly'])->default('fixed');
             $table->text('description')->nullable();
+            // Add this column: allows you to set a cap on straight days (e.g., 3.00)
+            // $table->decimal('max_consecutive_days', 8, 2)->nullable();
             $table->timestamps();
         });
     }
