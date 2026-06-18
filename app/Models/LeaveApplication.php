@@ -41,7 +41,7 @@ class LeaveApplication extends Model
         return $this->belongsTo(LeaveConfiguration::class, 'leave_config_id');
     }
 
-    public function reviewBy()
+    public function reviewedBy()
     {
         return $this->belongsTo(User::class, 'reviewed_by');
     }

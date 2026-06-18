@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\LeaveConfiguration;
 use App\Models\LeaveCredit;
 use App\Models\LeaveRecord;
+use Carbon\Carbon;
 
 class LeaveApplicationController extends Controller
 {
@@ -29,8 +30,10 @@ class LeaveApplicationController extends Controller
                     'employee_id' => $app->employee_id,
                     'leave_type'  => $app->leaveConfiguration->name,
                     'code'        => $app->leaveConfiguration->code,
-                    'start_date'  => $app->start_date,
-                    'end_date'    => $app->end_date,
+                    // 'start_date'  => $app->start_date,
+                    // 'end_date'    => $app->end_date,
+                    'start_date'  => Carbon::parse($app->start_date)->format('Y-m-d'),
+                    'end_date'    => Carbon::parse($app->end_date)->format('Y-m-d'),
                     'days_applied' => $app->days_applied,
                     'reason' => $app->reason,
                     'status'      => $app->status,
@@ -106,7 +109,7 @@ class LeaveApplicationController extends Controller
             'start_date'      => $application->start_date,
             'end_date'        => $application->end_date,
             'days_taken'      => $application->days_applied,
-            'remarks'         => 'Approved leave application #' . $application->id,
+            'remarks'         => $application->id,
         ]);
 
         $credit = LeaveCredit::where('employee_id', $application->employee_id)

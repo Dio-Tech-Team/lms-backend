@@ -29,7 +29,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'name'           => 'Sick Leave',
                 'code'           => 'SL',
                 'application_to'  => 'all',
-                'can_carry_over' => true,
+                'can_carry_over' => false,
                 'can_monetize'   => true,
                 'fixed_days'     => null,
                 'monthly_credit' => 1.25,

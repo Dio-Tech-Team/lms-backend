@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\LeaveRecord;
 use App\Models\Employee;
 use App\Models\LeaveCredit;
+use Carbon\Carbon;
 
 class LeaveRecordController extends Controller
 {
@@ -28,8 +29,11 @@ class LeaveRecordController extends Controller
                     'employee'   => $record->employee->first_name . ' ' . $record->employee->last_name,
                     'leave_type' => $record->leaveConfiguration->name,
                     'code'       => $record->leaveConfiguration->code,
-                    'start_date' => $record->start_date,
-                    'end_date'   => $record->end_date,
+                    // 'start_date' => $record->start_date,
+                    // 'end_date'   => $record->end_date,
+
+                    'start_date'  => Carbon::parse($record->start_date)->format('Y-m-d'),
+                    'end_date'    => Carbon::parse($record->end_date)->format('Y-m-d'),
                     'days_taken' => $record->days_taken,
                     'remarks'    => $record->remarks,
                     'recorded_by' => $record->recordedBy->username,
