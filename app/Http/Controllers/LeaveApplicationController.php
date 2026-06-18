@@ -9,6 +9,7 @@ use App\Models\LeaveConfiguration;
 use App\Models\LeaveCredit;
 use App\Models\LeaveRecord;
 use Carbon\Carbon;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class LeaveApplicationController extends Controller
 {
@@ -66,7 +67,28 @@ class LeaveApplicationController extends Controller
         if (!$employee) {
             return response()->json([
                 'message' => 'The authenticated user is not linked to an employee profile.'
-            ], 422);
+            ], 402);
+        }
+
+        // Get the configuration rules for this specific leave type
+        $config = LeaveConfiguration::findOrFail($validated['leave_config_id']);
+
+        if ($config->code === 'WL' && $validated['days_applied'] > 3) {
+            return response()->json([
+                'message' => 'Wellness leave cannot  exceed 3 consecutive days per application.'
+            ], 402);
+        }
+
+        // Fetch the employee's current credit record for this year
+        $credit = LeaveCredit::where('employee_id', $employee->id)
+            ->where('leave_config_id', $config->id)
+            ->where('year', now()->year)
+            ->first();
+
+        if (!$credit || $credit->remaining_balance < $validated['days_applied']) {
+            return response()->json([
+                'message' => 'Insufficient leave balance. You only have ' . ($credit->remaining_balance ?? 0) . ' days remaining.'
+            ], 402);
         }
 
         $application = LeaveApplication::create([
@@ -94,7 +116,18 @@ class LeaveApplicationController extends Controller
                 'message' => 'Application is already ' . $application->status,
             ], 400);
         }
+        // Fetch the credit details again to make sure things haven't changed since filing
+        $credit = LeaveCredit::where('employee_id', $application->employee_id)
+            ->where('leave_config_id', $application->leave_config_id)
+            ->where('year', now()->year)
+            ->first();
 
+        // Double check balance right before committing deduction
+        if (!$credit || $credit->remaining_balance < $application->days_applied) {
+            return response()->json([
+                'message' => 'Cannot approve. Employee has insufficient leave balance.',
+            ], 402);
+        }
         // Update application status
         $application->update([
             'status'      => 'approved',
@@ -111,12 +144,6 @@ class LeaveApplicationController extends Controller
             'days_taken'      => $application->days_applied,
             'remarks'         => $application->id,
         ]);
-
-        $credit = LeaveCredit::where('employee_id', $application->employee_id)
-            ->where('leave_config_id', $application->leave_config_id)
-            ->where('year', now()->year)
-            ->first();
-
 
         if ($credit) {
             $credit->used_credits += $application->days_applied;
@@ -159,6 +186,38 @@ class LeaveApplicationController extends Controller
             ->findOrFail($id);
 
         return response()->json($application);
+    }
+
+    public function generatePdf($id)
+    {
+        $application = LeaveApplication::with(['employee.department', 'leaveConfiguration', 'reviewedBy'])
+            ->findOrFail($id);
+
+        $code = $application->leaveConfiguration->code;
+
+        // Get current leave credits for VL and SL
+        $vlCredit = LeaveCredit::where('employee_id', $application->employee_id)
+            ->whereHas('leaveConfiguration', fn($q) => $q->where('code', 'VL'))
+            ->where('year', now()->year)
+            ->first();
+
+        $slCredit = LeaveCredit::where('employee_id', $application->employee_id)
+            ->whereHas('leaveConfiguration', fn($q) => $q->where('code', 'SL'))
+            ->where('year', now()->year)
+            ->first();
+
+        $data = [
+            'application' => $application,
+            'code'        => $code,
+            'vl_total'    => $vlCredit->total_credits ?? 0,
+            'vl_balance'  => $vlCredit->remaining_balance ?? 0,
+            'sl_total'    => $slCredit->total_credits ?? 0,
+            'sl_balance'  => $slCredit->remaining_balance ?? 0,
+        ];
+
+        $pdf = Pdf::loadView('pdf.leave-application', $data);
+
+        return $pdf->stream('leave-application-' . $application->id . '.pdf');
     }
 
     /**

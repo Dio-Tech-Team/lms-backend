@@ -58,4 +58,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('leave-applications/{id}', [LeaveApplicationController::class, 'show']);
     Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
     Route::post('leave-applications/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
+
+    //Leave form
+    Route::get('leave-applications/{id}/pdf', [LeaveApplicationController::class, 'generatePdf']);
 });
