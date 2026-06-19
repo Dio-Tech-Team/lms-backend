@@ -8,7 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
-use App\Models\PromotionHistory;
+use App\Models\EmploymentHistory;
 use Illuminate\Validation\Rules\Password;
 
 
@@ -235,7 +235,7 @@ class EmployeeController extends Controller
                 'position'                           => $request->position,
                 'date_hired'                         => $request->date_hired,
             ]);
-            PromotionHistory::create([
+            EmploymentHistory::create([
                 'employee_id'                  => $employee->id,
                 'previous_position'            => null,
                 'new_position'                 => $employee->position,
