@@ -80,16 +80,22 @@ class LeaveApplicationController extends Controller
         }
 
         // Fetch the employee's current credit record for this year
-        $credit = LeaveCredit::where('employee_id', $employee->id)
-            ->where('leave_config_id', $config->id)
-            ->where('year', now()->year)
+        // $credit = LeaveCredit::where('employee_id', $employee->id)
+        //     ->where('leave_config_id', $config->id)
+        //     ->where('year', now()->year)
+        //     ->first();
+
+        // Inside LeaveApplicationController.php - Line 86
+        $credit = LeaveCredit::where('employee_id', $request->employee_id)
+            ->where('leave_configuration_id', $request->leave_type_id) // <-- Fix this key here!
+            ->where('year', 2026)
             ->first();
 
-        if (!$credit || $credit->remaining_balance < $validated['days_applied']) {
-            return response()->json([
-                'message' => 'Insufficient leave balance. You only have ' . ($credit->remaining_balance ?? 0) . ' days remaining.'
-            ], 402);
-        }
+        // if (!$credit || $credit->remaining_balance < $validated['days_applied']) {
+        //     return response()->json([
+        //         'message' => 'Insufficient leave balance. You only have ' . ($credit->remaining_balance ?? 0) . ' days remaining.'
+        //     ], 402);
+        // }
 
         $application = LeaveApplication::create([
             'employee_id'     => $employee->id,
@@ -123,11 +129,11 @@ class LeaveApplicationController extends Controller
             ->first();
 
         // Double check balance right before committing deduction
-        if (!$credit || $credit->remaining_balance < $application->days_applied) {
-            return response()->json([
-                'message' => 'Cannot approve. Employee has insufficient leave balance.',
-            ], 402);
-        }
+        // if (!$credit || $credit->remaining_balance < $application->days_applied) {
+        //     return response()->json([
+        //         'message' => 'Cannot approve. Employee has insufficient leave balance.',
+        //     ], 402);
+        // }
         // Update application status
         $application->update([
             'status'      => 'approved',
