@@ -5,15 +5,19 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Employee;
 
-class PromotionHistory extends Model
+class EmploymentHistory extends Model
 {
-    protected $table = 'promotion_history'; // ← add this
+    // Explicitly define the table name to match your migration
+    protected $table = 'employment_history';
 
     protected $fillable = [
         'employee_id',
         'previous_position',
         'new_position',
-        'promotion_date',
+        'previous_employment_status',
+        'new_employment_status',
+        'effective_date', // Synced with migration
+        'remarks',
     ];
 
     public function employee()

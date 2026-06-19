@@ -48,6 +48,6 @@ class Employee extends Model
 
     public function promotion_history()
     {
-        return $this->hasMany(PromotionHistory::class);
+        return $this->hasMany(EmploymentHistory::class);
     }
 }

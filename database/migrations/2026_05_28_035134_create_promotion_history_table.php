@@ -11,12 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('promotion_history', function (Blueprint $table) {
+        Schema::create('employment_history', function (Blueprint $table) {
             $table->id();
             $table->foreignId('employee_id')->constrained()->onDelete('cascade');
-            $table->string('previous_position');
+            $table->string('previous_position')->nullable();
             $table->string('new_position');
-            $table->date('promotion_date');
+            $table->enum('previous_employment_status', ['permanent', 'casual', 'elected', 'job_order'])->nullable();
+            $table->enum('new_employment_status', ['permanent', 'casual', 'elected', 'job_order']);
+            $table->date('effective_date');
+            $table->text('remarks')->nullable();
             $table->timestamps();
         });
     }
@@ -26,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('promotion_history');
+        Schema::dropIfExists('employment_history');
     }
 };
