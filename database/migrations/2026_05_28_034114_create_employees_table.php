@@ -15,16 +15,38 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('department_id')->constrained()->onDelete('cascade');
+
+            // Personal Information
             $table->string('first_name');
             $table->string('middle_name')->nullable();
-            $table->string('last_name');
-            $table->date('birthdate')->nullable();
-            $table->string('contact_number')->nullable();
+            $table->string('surname');
             $table->string('id_number')->unique();
-            $table->enum('employment_status', ['permanent', 'casual', 'elected']);
+            $table->date('birthdate')->nullable();
+            $table->string('place_of_birth')->nullable();
+            $table->enum('sex', ['male', 'female']);
+            $table->enum('civil_status', ['single', 'married', 'widowed', 'separated']);
+            $table->string('height')->nullable();
+            $table->string('weight')->nullable();
+            $table->string('bloodtype')->nullable();
+            $table->enum('highest_educational_attainment', ['elementary', 'secondary', 'vocational', 'college', 'graduated']);
+
+            // Contact & Address
+            $table->string('residential_address')->nullable();
+            $table->string('contact_number')->nullable();
+
+            // Government IDs
+            $table->string('umid_id')->nullable();
+            $table->string('pagibig_id')->nullable();
+            $table->string('philhealth_number')->nullable();
+            $table->string('psn_number')->nullable();
+            $table->string('tin_number')->nullable();
+
+            // Employment Information
+            $table->enum('employment_status', ['permanent', 'casual', 'elected', 'job_order']);
             $table->string('position');
             $table->date('date_hired');
             $table->boolean('is_active')->default(true);
+
             $table->timestamps();
         });
     }

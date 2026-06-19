@@ -11,15 +11,30 @@ class Employee extends Model
         'department_id',
         'first_name',
         'middle_name',
-        'last_name',
-        'birthdate',
-        'contact_number',
+        'surname',
         'id_number',
+        'birthdate',
+        'place_of_birth',
+        'sex',
+        'civil_status',
+        'height',
+        'weight',
+        'bloodtype',
+        'highest_educational_attainment',
+        'residential_address',
+        'contact_number',
+        'umid_id',
+        'pagibig_id',
+        'philhealth_number',
+        'psn_number',
+        'tin_number',
         'employment_status',
         'position',
         'date_hired',
-        'is_active'
+        'is_active',
     ];
+
+
 
     public function user()
     {
