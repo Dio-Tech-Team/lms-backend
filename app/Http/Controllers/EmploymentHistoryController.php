@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\PromotionHistory;
+use App\Models\EmploymentHistory;
 use App\Models\Employee;
 
-class PromotionHistoryController extends Controller
+class EmploymentHistoryController extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -15,7 +15,7 @@ class PromotionHistoryController extends Controller
     {
         $employee = Employee::findOrFail($employeeId);
 
-        $promotions = PromotionHistory::where('employee_id', $employeeId)
+        $promotions = EmploymentHistory::where('employee_id', $employeeId)
             ->orderBy('effective_date', 'desc') // Synced column name
             ->get();
 
@@ -48,7 +48,7 @@ class PromotionHistoryController extends Controller
         ]);
 
         // Create the history tracking record
-        $promotion = PromotionHistory::create([
+        $promotion = EmploymentHistory::create([
             'employee_id'                => $employeeId,
             'previous_position'          => $request->previous_position,
             'new_position'               => $request->new_position,
@@ -82,7 +82,7 @@ class PromotionHistoryController extends Controller
      */
     public function destroy($employeeId, $promotionId)
     {
-        $promotion = PromotionHistory::where('employee_id', $employeeId)
+        $promotion = EmploymentHistory::where('employee_id', $employeeId)
             ->where('id', $promotionId)
             ->firstOrFail();
 

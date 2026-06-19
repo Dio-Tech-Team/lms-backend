@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\DepartmentController;
-use App\Http\Controllers\PromotionHistoryController;
+use App\Http\Controllers\EmploymentHistoryController;
 
 
 
@@ -21,7 +21,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('departments', DepartmentController::class);
 
     // Promotion History Routes
-    Route::get('employees/{employeeId}/promotions', [PromotionHistoryController::class, 'index']);
-    Route::post('employees/{employeeId}/promotions', [PromotionHistoryController::class, 'store']);
-    Route::delete('employees/{employeeId}/promotions/{promotionId}', [PromotionHistoryController::class, 'destroy']);
+    Route::get('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'index']);
+    Route::post('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'store']);
+    Route::delete('employees/{employeeId}/promotions/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
 });
