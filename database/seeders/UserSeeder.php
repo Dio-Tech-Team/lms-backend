@@ -19,8 +19,6 @@ class UserSeeder extends Seeder
             'email' => 'hradmin@gmail.com',
             'password' => Hash::make('@Password123'),
             'role' => 'hr_admin'
-
-
         ]);
     }
 }
