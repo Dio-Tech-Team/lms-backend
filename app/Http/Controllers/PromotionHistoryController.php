@@ -16,15 +16,14 @@ class PromotionHistoryController extends Controller
         $employee = Employee::findOrFail($employeeId);
 
         $promotions = PromotionHistory::where('employee_id', $employeeId)
-            ->orderBy('promotion_date', 'desc')
+            ->orderBy('effective_date', 'desc') // Synced column name
             ->get();
 
         return response()->json([
-            'employee' => $employee->first_name . ' ' . $employee->last_name,
+            'employee' => $employee->first_name . ' ' . $employee->surname, // Fixed to use surname
             'promotions' => $promotions
         ]);
     }
-
     /**
      * Store a newly created resource in storage.
      */
@@ -32,24 +31,37 @@ class PromotionHistoryController extends Controller
     {
         $employee = Employee::findOrFail($employeeId);
 
+        // Validate all fields present in your updated migration
         $request->validate([
-            'previous_position' => 'required|string|max:255',
-            'new_position' => 'required|string|max:255',
-            'promotion_date' => 'required|date',
+            'previous_position'          => 'nullable|string|max:255',
+            'new_position'               => 'required|string|max:255',
+            'previous_employment_status' => 'nullable|in:permanent,casual,elected,job_order',
+            'new_employment_status'      => 'required|in:permanent,casual,elected,job_order',
+            'effective_date'             => 'required|date',
+            'remarks'                    => 'nullable|string',
         ]);
 
-        $employee->update(['position' => $request->new_position]);
+        // Automatically update the Employee's current profile status
+        $employee->update([
+            'position'          => $request->new_position,
+            'employment_status' => $request->new_employment_status
+        ]);
+
+        // Create the history tracking record
         $promotion = PromotionHistory::create([
-            'employee_id' => $employeeId,
-            'previous_position' => $request->previous_position,
-            'new_position' => $request->new_position,
-            'promotion_date' => $request->promotion_date,
+            'employee_id'                => $employeeId,
+            'previous_position'          => $request->previous_position,
+            'new_position'               => $request->new_position,
+            'previous_employment_status' => $request->previous_employment_status,
+            'new_employment_status'      => $request->new_employment_status,
+            'effective_date'             => $request->effective_date, // Synced column name
+            'remarks'                    => $request->remarks,
         ]);
 
         return response()->json([
             'message' => 'Promotion history created successfully',
             'promotion' => $promotion
-        ]);
+        ], 201);
     }
 
     /**
