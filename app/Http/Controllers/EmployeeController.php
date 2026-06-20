@@ -18,35 +18,6 @@ class EmployeeController extends Controller
      * Display a listing of the resource.
      */
 
-    //OLD Code
-    // public function index()
-    // {
-    //     $employees = Employee::with(['user', 'department'])
-    //         ->get()
-    //         ->map(function ($employee) {
-    //             return [
-    //                 'id' => $employee->id,
-    //                 'username' => $employee->user->username,
-    //                 'email' => $employee->user->email,
-    //                 'first_name' => $employee->first_name,
-    //                 'middle_name' => $employee->middle_name,
-    //                 'last_name' => $employee->last_name,
-    //                 'birthdate' => $employee->birthdate,
-    //                 'contact_number' => $employee->contact_number,
-    //                 'id_number' => $employee->id_number,
-    //                 'employment_status' => $employee->employment_status,
-    //                 'position' => $employee->position,
-    //                 'department' => $employee->department->name,
-    //                 'date_hired' => $employee->date_hired,
-    //                 'is_active' => $employee->is_active,
-    //             ];
-    //         });
-
-    //     return response()->json($employees);
-    // }
-
-    // 
-
     //Vertical Partitioning applied to main query and relationship
 
     public function index()
@@ -93,59 +64,6 @@ class EmployeeController extends Controller
 
         return response()->json($employees);
     }
-    // public function store(Request $request)
-    // {
-
-    //     $request->validate([
-    //         'username' => 'required|string|unique:users,username',
-    //         'email' => 'required|string|email|unique:users,email',
-    //         'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols(),],
-    //         'first_name' => 'required|string',
-    //         'middle_name' => 'nullable|string',
-    //         'last_name' => 'required|string',
-    //         'birthdate' => 'nullable|date',
-    //         'contact_number' => 'nullable|string',
-    //         'id_number' => 'required|string|unique:employees,id_number',
-    //         'employment_status' => "required|in:permanent,casual,elected",
-    //         'position' => 'required|string',
-    //         'department_id' => 'required|exists:departments,id',
-    //         'date_hired' => 'required|date',
-    //     ]);
-
-    //     $admin = request()->user();
-    //     if (!$admin || $admin->role !== 'hr_admin') {
-
-    //         return response()->json([
-    //             'message' => "Forbidden"
-    //         ], 403);
-    //     }
-
-    //     $user = User::create([
-    //         'username' => $request->username,
-    //         'email' => $request->email,
-    //         'password' => Hash::make($request->password),
-    //         'role' => 'employee',
-    //     ]);
-
-    //     $employee = Employee::create([
-    //         'user_id'           => $user->id,
-    //         'department_id'     => $request->department_id,
-    //         'first_name'        => $request->first_name,
-    //         'middle_name'       => $request->middle_name,
-    //         'last_name'         => $request->last_name,
-    //         'birthdate'         => $request->birthdate,
-    //         'contact_number'    => $request->contact_number,
-    //         'id_number'         => $request->id_number,
-    //         'employment_status' => $request->employment_status,
-    //         'position'          => $request->position,
-    //         'date_hired'        => $request->date_hired,
-    //     ]);
-
-    //     return response()->json([
-    //         'message' => 'Employee created successfully',
-    //         'employee' => $employee,
-    //     ], 201);
-    // }
 
     // Implemented ACID Database Transaction
     public function store(Request $request)
@@ -196,19 +114,7 @@ class EmployeeController extends Controller
                 'role' => 'employee',
             ]);
 
-            // return Employee::create([
-            //     'user_id'           => $user->id,
-            //     'department_id'     => $request->department_id,
-            //     'first_name'        => $request->first_name,
-            //     'middle_name'       => $request->middle_name,
-            //     'last_name'         => $request->last_name,
-            //     'birthdate'         => $request->birthdate,
-            //     'contact_number'    => $request->contact_number,
-            //     'id_number'         => $request->id_number,
-            //     'employment_status' => $request->employment_status,
-            //     'position'          => $request->position,
-            //     'date_hired'        => $request->date_hired,
-            // ]);
+
             $employee = Employee::create([
                 'user_id'                          => $user->id,
                 'department_id'                     => $request->department_id,
@@ -253,28 +159,6 @@ class EmployeeController extends Controller
         ], 201);
     }
 
-    // public function show(string $id)
-    // {
-    //     $employee = Employee::with(['user', 'department', 'promotion_history'])->findOrFail($id);
-
-    //     return response()->json([
-    //         'id' => $employee->id,
-    //         'username' => $employee->user->username,
-    //         'email' => $employee->user->email,
-    //         'first_name' => $employee->first_name,
-    //         'middle_name' => $employee->middle_name,
-    //         'last_name' => $employee->last_name,
-    //         'birthdate' => $employee->birthdate,
-    //         'contact_number' => $employee->contact_number,
-    //         'id_number' => $employee->id_number,
-    //         'employment_status' => $employee->employment_status,
-    //         'position' => $employee->position,
-    //         'department' => $employee->department->name,
-    //         'date_hired' => $employee->date_hired,
-    //         'promotion_history' => $employee->promotion_history,
-    //         'is_active' => $employee->is_active,
-    //     ]);
-    // }
 
 
     //Vertical Partitioning applied to single record lookups.
@@ -315,11 +199,17 @@ class EmployeeController extends Controller
             'department' => function ($query) {
                 $query->select('id', 'name');
             },
-            'promotion_history' => function ($query) {
+            'employment_history' => function ($query) {
                 $query->select('id', 'employee_id', 'previous_position', 'new_position', 'previous_employment_status', 'new_employment_status', 'effective_date', 'remarks')
                     ->orderBy('effective_date', 'desc');
             }
         ])->findOrFail($id);
+        // NEW: Calculate Step Increment, Loyalty Pay, Retirement
+        $stepIncrementInfo = $this->calculateStepIncrement($employee);
+        $loyaltyPayInfo = $this->calculateLoyaltyPay($employee);
+        $retirementInfo = $this->calculateRetirement($employee);
+
+
 
         return response()->json([
             'id'                                => $employee->id,
@@ -348,7 +238,10 @@ class EmployeeController extends Controller
             'position'                           => $employee->position,
             'department'                         => $employee->department->name ?? null,
             'date_hired'                         => $employee->date_hired,
-            'employment_history'                 => $employee->employmentHistory,
+            'employment_history'                 => $employee->employment_history,
+            'step_increment'                     => $stepIncrementInfo,
+            'loyalty_pay'                        => $loyaltyPayInfo,
+            'retirement'                         => $retirementInfo,
             'is_active'                          => $employee->is_active,
         ]);
     }
@@ -378,6 +271,9 @@ class EmployeeController extends Controller
             'psn_number'                       => 'nullable|string',
             'tin_number'                       => 'nullable|string',
             'department_id'                    => 'sometimes|exists:departments,id',
+            'position'                         => 'sometimes|string',
+            'employment_status'                => 'sometimes|in:permanent,casual,elected,job_order',
+            'date_hired'                       => 'sometimes|date',
         ]);
 
         $employee->update($validated);
@@ -386,6 +282,171 @@ class EmployeeController extends Controller
             'message'  => 'Employee updated successfully',
             'employee' => $employee,
         ]);
+    }
+
+    // public function calculateStepIncrement($employee)
+    // {
+    //     $latestReset = $employee->employment_history()
+    //         ->where(function ($query) {
+    //             $query->where('new_employment_status', 'permanent')
+    //                 ->orWhereColumn('new_position', '!=', 'previous_position');
+    //         })
+    //         ->orderBy('effective_date', 'desc')
+    //         ->first();
+
+    //     if (!$latestReset || $employee->employment_status !== 'permanent') {
+    //         return [
+    //             'current_step' => null,
+    //             'message' => 'Not applicable - employee is not permanent',
+    //         ];
+    //     }
+
+    //     $startDate = \Carbon\Carbon::parse($latestReset->effective_date);
+    //     $yearsServed = $startDate->diffInYears(now());
+
+    //     // Safeguard: if startDate is in the future, treat as 0 years served
+    //     $yearsServed = max(0, $yearsServed);
+
+    //     $step = min(8, max(1, floor($yearsServed / 3) + 1));
+
+    //     $nextStepDate = $startDate->copy()->addYears($step * 3);
+
+    //     return [
+    //         'current_step'    => (int) $step,
+    //         'since'           => $startDate->format('Y-m-d'),
+    //         'next_step_date'  => $step < 8 ? $nextStepDate->format('Y-m-d') : null,
+    //     ];
+    // }
+
+    // public function calculateStepIncrement($employee)
+    // {
+    //     $latestReset = $employee->employment_history()
+    //         ->where(function ($query) {
+    //             $query->where('new_employment_status', 'permanent')
+    //                 ->orWhereColumn('new_position', '!=', 'previous_position');
+    //         })
+    //         ->orderBy('effective_date', 'desc')
+    //         ->first();
+
+    //     if (!$latestReset || $employee->employment_status !== 'permanent') {
+    //         return [
+    //             'current_step' => null,
+    //             'message' => 'Not applicable - employee is not permanent',
+    //             'history' => [],
+    //         ];
+    //     }
+
+    //     $startDate = \Carbon\Carbon::parse($latestReset->effective_date);
+    //     $yearsServed = max(0, $startDate->diffInYears(now()));
+    //     $step = min(8, max(1, floor($yearsServed / 3) + 1));
+
+    //     $nextStepDate = $startDate->copy()->addYears($step * 3);
+
+    //     // Build full step history (Step 1 up to current step)
+    //     $history = [];
+    //     for ($i = 1; $i <= $step; $i++) {
+    //         $stepDate = $startDate->copy()->addYears(($i - 1) * 3);
+    //         $history[] = [
+    //             'step' => $i,
+    //             'date_reached' => $stepDate->format('Y-m-d'),
+    //         ];
+    //     }
+
+    //     return [
+    //         'current_step'    => (int) $step,
+    //         'since'           => $startDate->format('Y-m-d'),
+    //         'next_step_date'  => $step < 8 ? $nextStepDate->format('Y-m-d') : null,
+    //         'history'         => $history,
+    //     ];
+    // }
+    public function calculateStepIncrement($employee)
+    {
+        $latestReset = $employee->employment_history()
+            ->where(function ($query) {
+                $query->where('new_employment_status', 'permanent')
+                    ->orWhereColumn('new_position', '!=', 'previous_position');
+            })
+            ->orderBy('effective_date', 'desc')
+            ->first();
+
+        if (!$latestReset || $employee->employment_status !== 'permanent') {
+            return [
+                'current_step' => null,
+                'message' => 'Not applicable - employee is not permanent',
+                'all_steps' => [],
+            ];
+        }
+
+        $startDate = \Carbon\Carbon::parse($latestReset->effective_date);
+        $yearsServed = max(0, $startDate->diffInYears(now()));
+        $currentStep = min(8, max(1, floor($yearsServed / 3) + 1));
+
+        $nextStepDate = $startDate->copy()->addYears($currentStep * 3);
+
+        // Build ALL 8 steps with their dates (past, current, future)
+        $allSteps = [];
+        for ($i = 1; $i <= 8; $i++) {
+            $stepDate = $startDate->copy()->addYears(($i - 1) * 3);
+            $allSteps[] = [
+                'step'        => $i,
+                'date'        => $stepDate->format('Y-m-d'),
+                'status'      => $i < $currentStep ? 'reached' : ($i == $currentStep ? 'current' : 'upcoming'),
+            ];
+        }
+
+        return [
+            'current_step'    => (int) $currentStep,
+            'since'           => $startDate->format('Y-m-d'),
+            'next_step_date'  => $currentStep < 8 ? $nextStepDate->format('Y-m-d') : null,
+            'all_steps'       => $allSteps,
+        ];
+    }
+    private function calculateLoyaltyPay($employee)
+    {
+        $startDate = \Carbon\Carbon::parse($employee->date_hired);
+        $yearsServed = $startDate->diffInYears(now());
+
+        if ($yearsServed < 10) {
+            $yearsUntilFirst = 10 - $yearsServed;
+            return [
+                'eligible' => false,
+                'years_served' => $yearsServed,
+                'years_until_next' => $yearsUntilFirst,
+                'next_milestone' => 10,
+            ];
+        }
+
+        // After 10 years, every 5 years
+        $yearsAfterFirst = $yearsServed - 10;
+        $milestonesPassed = floor($yearsAfterFirst / 5) + 1; // +1 for the initial 10-year milestone
+        $nextMilestone = 10 + ($milestonesPassed * 5);
+        $yearsUntilNext = $nextMilestone - $yearsServed;
+
+        return [
+            'eligible' => true,
+            'years_served' => $yearsServed,
+            'milestones_received' => (int) $milestonesPassed,
+            'years_until_next' => $yearsUntilNext,
+            'next_milestone' => $nextMilestone,
+        ];
+    }
+
+    private function calculateRetirement($employee)
+    {
+        if (!$employee->birthdate) {
+            return ['eligible' => false, 'message' => 'No birthdate on record'];
+        }
+
+        $birthdate = \Carbon\Carbon::parse($employee->birthdate);
+        $age = $birthdate->age;
+        $retirementDate = $birthdate->copy()->addYears(65);
+
+        return [
+            'current_age'      => $age,
+            'retirement_date'  => $retirementDate->format('Y-m-d'),
+            'years_remaining'  => $age < 65 ? (65 - $age) : 0,
+            'eligible_now'     => $age >= 65,
+        ];
     }
 
     public function destroy(string $id)
