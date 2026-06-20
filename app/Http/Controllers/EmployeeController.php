@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Employee;
+use App\Models\EmploymentHistory;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -235,7 +236,7 @@ class EmployeeController extends Controller
                 'position'                           => $request->position,
                 'date_hired'                         => $request->date_hired,
             ]);
-            PromotionHistory::create([
+            EmploymentHistory::create([
                 'employee_id'                  => $employee->id,
                 'previous_position'            => null,
                 'new_position'                 => $employee->position,
