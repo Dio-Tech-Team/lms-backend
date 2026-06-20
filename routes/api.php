@@ -12,6 +12,7 @@ use App\Http\Controllers\LeaveApplicationController;
 use App\Http\Controllers\EmploymentHistoryController;
 
 
+
 Route::post('/login', [AuthController::class, 'login']);
 // ->middleware('throttle:login'); // Limit to 5 attempts per minute
 
