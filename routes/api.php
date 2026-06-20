@@ -10,6 +10,7 @@ use App\Http\Controllers\LeaveConfigurationController;
 use App\Http\Controllers\LeaveCreditController;
 use App\Http\Controllers\LeaveRecordController;
 use App\Http\Controllers\LeaveApplicationController;
+use App\Http\Controllers\EmploymentHistoryController;
 
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -25,6 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('departments', DepartmentController::class);
 
     // Promotion History Routes
+
     Route::get('employees/{employeeId}/promotions', [PromotionHistoryController::class, 'index']);
     Route::post('employees/{employeeId}/promotions', [PromotionHistoryController::class, 'store']);
     Route::delete('employees/{employeeId}/promotions/{promotionId}', [PromotionHistoryController::class, 'destroy']);
@@ -61,4 +63,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //Leave form
     Route::get('leave-applications/{id}/pdf', [LeaveApplicationController::class, 'generatePdf']);
+
+    Route::get('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'index']);
+    Route::post('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'store']);
+    Route::delete('employees/{employeeId}/promotions/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
 });
