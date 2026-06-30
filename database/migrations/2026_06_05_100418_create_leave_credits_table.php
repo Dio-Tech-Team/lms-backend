@@ -15,9 +15,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('employee_id')->constrained()->onDelete('cascade');
             $table->foreignId('leave_configuration_id')->constrained()->onDelete('cascade');
-            $table->decimal('total_credits', 8, 2)->default(0);
-            $table->decimal('used_credits', 8, 2)->default(0);
-            $table->decimal('remaining_balance', 8, 2)->default(0);
+            $table->decimal('total_credits', 8, 3)->default(0);
+            $table->decimal('used_credits', 8, 3)->default(0);
+            $table->decimal('remaining_balance', 8, 3)->default(0);
             $table->year('year');
             $table->timestamp('last_updated')->nullable();
             $table->timestamps();

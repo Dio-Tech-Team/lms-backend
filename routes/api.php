@@ -10,11 +10,18 @@ use App\Http\Controllers\LeaveCreditController;
 use App\Http\Controllers\LeaveRecordController;
 use App\Http\Controllers\LeaveApplicationController;
 use App\Http\Controllers\EmploymentHistoryController;
+use App\Http\Controllers\AttendanceController;
 
 
 
 Route::post('/login', [AuthController::class, 'login']);
 // ->middleware('throttle:login'); // Limit to 5 attempts per minute
+// Route::post('/test-upload', function () {
+//     return [
+//         'SERVER_CONTENT_TYPE' => $_SERVER['CONTENT_TYPE'] ?? null,
+//         'FILES_GLOBAL' => $_FILES,
+//     ];
+// });
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -67,4 +74,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'index']);
     Route::post('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'store']);
     Route::delete('employees/{employeeId}/promotions/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
+
+    //attendance
+
+    Route::post('attendance/upload', [AttendanceController::class, 'upload']);
 });

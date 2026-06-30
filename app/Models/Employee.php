@@ -34,8 +34,6 @@ class Employee extends Model
         'is_active',
     ];
 
-
-
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -49,5 +47,22 @@ class Employee extends Model
     public function employment_history()
     {
         return $this->hasMany(EmploymentHistory::class);
+    }
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class);
+    }
+    public function leaveApplications()
+    {
+        return $this->hasMany(LeaveApplication::class);
+    }
+    public function leaveCredits()
+    {
+        return $this->hasMany(LeaveCredit::class);
+    }
+
+    public function leaveRecords()
+    {
+        return $this->hasMany(LeaveRecord::class);
     }
 }

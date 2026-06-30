@@ -19,7 +19,7 @@ class DepartmentSeeder extends Seeder
             ['name' => 'Information Technology', 'code' => 'IT', 'is_active' => true],
             ['name' => 'Health', 'code' => 'HLT', 'is_active' => true],
             ['name' => 'Social Welfare', 'code' => 'SWD', 'is_active' => true],
-            ['name' => 'Agriculture', 'code' => 'AGR', 'is_active' => true],
+            ['name' => 'Municipal Agriculture Services Office', 'code' => 'MASO', 'is_active' => true],
             ['name' => 'Mayor Office', 'code' => 'MO', 'is_active' => true],
         ];
 
