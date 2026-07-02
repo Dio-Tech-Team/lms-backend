@@ -20,6 +20,7 @@ return new class extends Migration
             $table->decimal('days_applied', 8, 2);
             $table->text('reason')->nullable();
             $table->enum('status', ['pending', 'approved', 'cancelled'])->default('pending');
+            $table->index('status');
             $table->timestamp('applied_at')->nullable();
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('reviewed_at')->nullable();

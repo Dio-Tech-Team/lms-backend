@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\EmploymentHistory;
 use App\Models\Employee;
+use Illuminate\Support\Facades\DB;
 
 class EmploymentHistoryController extends Controller
 {
@@ -13,15 +14,17 @@ class EmploymentHistoryController extends Controller
      */
     public function index($employeeId)
     {
-        $employee = Employee::findOrFail($employeeId);
+        $employee = Employee::select(['id', 'first_name', 'surname'])
+            ->findOrFail($employeeId);
 
-        $promotions = EmploymentHistory::where('employee_id', $employeeId)
+        $promotion = EmploymentHistory::select('employee_id', 'previous_position', 'new_position', 'previous_employment_status', 'new_employment_status', 'effective_date', 'remarks')
+            ->where('employee_id', $employeeId)
             ->orderBy('effective_date', 'desc') // Synced column name
             ->get();
 
         return response()->json([
             'employee' => $employee->first_name . ' ' . $employee->surname, // Fixed to use surname
-            'promotions' => $promotions
+            'promotion' => $promotion
         ]);
     }
     /**
@@ -41,26 +44,37 @@ class EmploymentHistoryController extends Controller
             'remarks'                    => 'nullable|string',
         ]);
 
-        // Automatically update the Employee's current profile status
-        $employee->update([
-            'position'          => $request->new_position,
-            'employment_status' => $request->new_employment_status
-        ]);
+        $promotion = DB::transaction(function () use ($request, $employeeId) {
+            // Single query: find and update employee position/status
+            Employee::where('id', $employeeId)->update([
+                'position'          => $request->new_position,
+                'employment_status' => $request->new_employment_status,
+            ]);
 
-        // Create the history tracking record
-        $promotion = EmploymentHistory::create([
-            'employee_id'                => $employeeId,
-            'previous_position'          => $request->previous_position,
-            'new_position'               => $request->new_position,
-            'previous_employment_status' => $request->previous_employment_status,
-            'new_employment_status'      => $request->new_employment_status,
-            'effective_date'             => $request->effective_date, // Synced column name
-            'remarks'                    => $request->remarks,
-        ]);
+            // Create the history record
+            return EmploymentHistory::create([
+                'employee_id'                => $employeeId,
+                'previous_position'          => $request->previous_position,
+                'new_position'               => $request->new_position,
+                'previous_employment_status' => $request->previous_employment_status,
+                'new_employment_status'      => $request->new_employment_status,
+                'effective_date'             => $request->effective_date,
+                'remarks'                    => $request->remarks,
+            ]);
+        });
 
         return response()->json([
-            'message' => 'Promotion history created successfully',
-            'promotion' => $promotion
+            'message'  => 'Employment history recorded successfully',
+            'history'  => $promotion->only([
+                'id',
+                'employee_id',
+                'previous_position',
+                'new_position',
+                'previous_employment_status',
+                'new_employment_status',
+                'effective_date',
+                'remarks'
+            ])
         ], 201);
     }
 
@@ -80,16 +94,29 @@ class EmploymentHistoryController extends Controller
     /**
      * Remove the specified resource from storage.
      */
+    // public function destroy($employeeId, $promotionId)
+    // {
+    //     $promotion = EmploymentHistory::where('employee_id', $employeeId)
+    //         ->where('id', $promotionId)
+    //         ->firstOrFail();
+
+    //     $promotion->delete();
+
+    //     return response()->json([
+    //         'message' => 'Promotion history deleted successfully'
+    //     ]);
+    // }
     public function destroy($employeeId, $promotionId)
     {
-        $promotion = EmploymentHistory::where('employee_id', $employeeId)
+        // OPTIMIZED: single query instead of firstOrFail + delete
+        $affected = EmploymentHistory::where('employee_id', $employeeId)
             ->where('id', $promotionId)
-            ->firstOrFail();
+            ->delete();
 
-        $promotion->delete();
+        if (!$affected) {
+            return response()->json(['message' => 'Record not found'], 404);
+        }
 
-        return response()->json([
-            'message' => 'Promotion history deleted successfully'
-        ]);
+        return response()->json(['message' => 'Employment history deleted successfully']);
     }
 }

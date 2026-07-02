@@ -78,4 +78,5 @@ Route::middleware('auth:sanctum')->group(function () {
     //attendance
 
     Route::post('attendance/upload', [AttendanceController::class, 'upload']);
+    Route::get('attendance', [AttendanceController::class, 'index']);
 });

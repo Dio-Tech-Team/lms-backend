@@ -14,8 +14,9 @@ return new class extends Migration
         Schema::create('attendances', function (Blueprint $table) {
             $table->id();
             $table->foreignId('employee_id')->constrained('employees')->onDelete('cascade');
-            $table->string('month'); // e.g., "April"
+            $table->string('month');
             $table->year('year');
+            $table->index(['month', 'year']);
             $table->integer('total_working_days');
             $table->integer('absent_with_leave_days')->default(0);
             $table->integer('absent_without_leave_days')->default(0);

@@ -20,47 +20,88 @@ class EmployeeController extends Controller
 
     //Vertical Partitioning applied to main query and relationship
 
+    // public function index()
+    // {
+    //     $employees = Employee::select([
+    //         'id',
+    //         'user_id',
+    //         'department_id',
+    //         'first_name',
+    //         'middle_name',
+    //         'surname',
+    //         'id_number',
+    //         'employment_status',
+    //         'position',
+    //         'date_hired',
+    //         'is_active'
+
+    //     ])
+    //         ->with([
+    //             'user' => function ($query) {
+    //                 $query->select('id', 'username', 'email');
+    //             },
+    //             'department' => function ($query) {
+    //                 $query->select('id', 'name');
+    //             }
+    //         ])
+    //         ->get()
+    //         ->map(function ($employee) {
+    //             return [
+    //                 'id'                => $employee->id,
+    //                 'username'          => $employee->user->username ?? null,
+    //                 'email'             => $employee->user->email ?? null,
+    //                 'first_name'        => $employee->first_name,
+    //                 'middle_name'       => $employee->middle_name,
+    //                 'surname'           => $employee->surname,
+    //                 'id_number'         => $employee->id_number,
+    //                 'employment_status' => $employee->employment_status,
+    //                 'position'          => $employee->position,
+    //                 'department'        => $employee->department->name ?? null,
+    //                 'date_hired'        => $employee->date_hired,
+    //                 'is_active'         => $employee->is_active,
+    //             ];
+    //         });
+
+    //     return response()->json($employees);
+    // }
+    // OPTIMIZED: INNER JOIN instead of LEFT JOIN (with())
+    // since every employee MUST have a user and department
     public function index()
     {
         $employees = Employee::select([
-            'id',
-            'user_id',
-            'department_id',
-            'first_name',
-            'middle_name',
-            'surname',
-            'id_number',
-            'employment_status',
-            'position',
-            'date_hired',
-            'is_active'
-
+            'employees.id',
+            'employees.first_name',
+            'employees.middle_name',
+            'employees.surname',
+            'employees.id_number',
+            'employees.employment_status',
+            'employees.position',
+            'employees.date_hired',
+            'employees.is_active',
+            'users.username',
+            'users.email',
+            'departments.name as department_name',
         ])
-            ->with([
-                'user' => function ($query) {
-                    $query->select('id', 'username', 'email');
-                },
-                'department' => function ($query) {
-                    $query->select('id', 'name');
-                }
-            ])
-            ->get()
-            ->map(function ($employee) {
-                return [
-                    'id'                => $employee->id,
-                    'username'          => $employee->user->username ?? null,
-                    'email'             => $employee->user->email ?? null,
-                    'first_name'        => $employee->first_name,
-                    'middle_name'       => $employee->middle_name,
-                    'surname'           => $employee->surname,
-                    'id_number'         => $employee->id_number,
-                    'employment_status' => $employee->employment_status,
-                    'position'          => $employee->position,
-                    'department'        => $employee->department->name ?? null,
-                    'date_hired'        => $employee->date_hired,
-                    'is_active'         => $employee->is_active,
-                ];
-            });
+            ->join('users', 'employees.user_id', '=', 'users.id')
+            ->join('departments', 'employees.department_id', '=', 'departments.id')
+            ->paginate(10);
+        // ->get()
+        // ->map(function ($employee) {
+        //     return [
+        //         'id'                => $employee->id,
+        //         'username'          => $employee->username,
+        //         'email'             => $employee->email,
+        //         'first_name'        => $employee->first_name,
+        //         'middle_name'       => $employee->middle_name,
+        //         'surname'           => $employee->surname,
+        //         'id_number'         => $employee->id_number,
+        //         'employment_status' => $employee->employment_status,
+        //         'position'          => $employee->position,
+        //         'department'        => $employee->department_name,
+        //         'date_hired'        => $employee->date_hired,
+        //         'is_active'         => $employee->is_active,
+        //     ];
+        // });
 
         return response()->json($employees);
     }
@@ -98,12 +139,10 @@ class EmployeeController extends Controller
             'date_hired'                       => 'required|date',
         ]);
 
+        // Authorization check before DB transaction
         $admin = request()->user();
         if (!$admin || $admin->role !== 'hr_admin') {
-
-            return response()->json([
-                'message' => "Forbidden"
-            ], 403);
+            return response()->json(['message' => 'Forbidden'], 403);
         }
 
         $employee = DB::transaction(function () use ($request) {
@@ -163,88 +202,182 @@ class EmployeeController extends Controller
 
     //Vertical Partitioning applied to single record lookups.
 
+    // public function show(string $id)
+    // {
+    //     $employee = Employee::select([
+    //         'id',
+    //         'user_id',
+    //         'department_id',
+    //         'first_name',
+    //         'middle_name',
+    //         'surname',
+    //         'id_number',
+    //         'birthdate',
+    //         'place_of_birth',
+    //         'sex',
+    //         'civil_status',
+    //         'height',
+    //         'weight',
+    //         'bloodtype',
+    //         'highest_educational_attainment',
+    //         'residential_address',
+    //         'contact_number',
+    //         'umid_id',
+    //         'pagibig_id',
+    //         'philhealth_number',
+    //         'psn_number',
+    //         'tin_number',
+    //         'employment_status',
+    //         'position',
+    //         'date_hired',
+    //         'is_active'
+    //     ])->with([
+    //         'user' => function ($query) {
+    //             $query->select('id', 'username', 'email');
+    //         },
+    //         'department' => function ($query) {
+    //             $query->select('id', 'name');
+    //         },
+    //         'employment_history' => function ($query) {
+    //             $query->select('id', 'employee_id', 'previous_position', 'new_position', 'previous_employment_status', 'new_employment_status', 'effective_date', 'remarks')
+    //                 ->orderBy('effective_date', 'desc');
+    //         }
+    //     ])->findOrFail($id);
+    //     // NEW: Calculate Step Increment, Loyalty Pay, Retirement
+    //     $stepIncrementInfo = $this->calculateStepIncrement($employee);
+    //     $loyaltyPayInfo = $this->calculateLoyaltyPay($employee);
+    //     $retirementInfo = $this->calculateRetirement($employee);
+
+
+
+    //     return response()->json([
+    //         'id'                                => $employee->id,
+    //         'username'                          => $employee->user->username ?? null,
+    //         'email'                              => $employee->user->email ?? null,
+    //         'first_name'                         => $employee->first_name,
+    //         'middle_name'                        => $employee->middle_name,
+    //         'surname'                            => $employee->surname,
+    //         'id_number'                          => $employee->id_number,
+    //         'birthdate'                          => $employee->birthdate,
+    //         'place_of_birth'                     => $employee->place_of_birth,
+    //         'sex'                                => $employee->sex,
+    //         'civil_status'                       => $employee->civil_status,
+    //         'height'                             => $employee->height,
+    //         'weight'                             => $employee->weight,
+    //         'bloodtype'                          => $employee->bloodtype,
+    //         'highest_educational_attainment'     => $employee->highest_educational_attainment,
+    //         'residential_address'                => $employee->residential_address,
+    //         'contact_number'                     => $employee->contact_number,
+    //         'umid_id'                            => $employee->umid_id,
+    //         'pagibig_id'                         => $employee->pagibig_id,
+    //         'philhealth_number'                  => $employee->philhealth_number,
+    //         'psn_number'                         => $employee->psn_number,
+    //         'tin_number'                         => $employee->tin_number,
+    //         'employment_status'                  => $employee->employment_status,
+    //         'position'                           => $employee->position,
+    //         'department'                         => $employee->department->name ?? null,
+    //         'date_hired'                         => $employee->date_hired,
+    //         'employment_history'                 => $employee->employment_history,
+    //         'step_increment'                     => $stepIncrementInfo,
+    //         'loyalty_pay'                        => $loyaltyPayInfo,
+    //         'retirement'                         => $retirementInfo,
+    //         'is_active'                          => $employee->is_active,
+    //     ]);
+    // }
+
     public function show(string $id)
     {
+        // OPTIMIZED: INNER JOIN for user and department (always exist)
+        // LEFT JOIN (with) kept for employment_history (may be empty)
         $employee = Employee::select([
-            'id',
-            'user_id',
-            'department_id',
-            'first_name',
-            'middle_name',
-            'surname',
-            'id_number',
-            'birthdate',
-            'place_of_birth',
-            'sex',
-            'civil_status',
-            'height',
-            'weight',
-            'bloodtype',
-            'highest_educational_attainment',
-            'residential_address',
-            'contact_number',
-            'umid_id',
-            'pagibig_id',
-            'philhealth_number',
-            'psn_number',
-            'tin_number',
-            'employment_status',
-            'position',
-            'date_hired',
-            'is_active'
-        ])->with([
-            'user' => function ($query) {
-                $query->select('id', 'username', 'email');
-            },
-            'department' => function ($query) {
-                $query->select('id', 'name');
-            },
-            'employment_history' => function ($query) {
-                $query->select('id', 'employee_id', 'previous_position', 'new_position', 'previous_employment_status', 'new_employment_status', 'effective_date', 'remarks')
-                    ->orderBy('effective_date', 'desc');
-            }
-        ])->findOrFail($id);
-        // NEW: Calculate Step Increment, Loyalty Pay, Retirement
+            'employees.id',
+            'employees.department_id',
+            'employees.first_name',
+            'employees.middle_name',
+            'employees.surname',
+            'employees.id_number',
+            'employees.birthdate',
+            'employees.place_of_birth',
+            'employees.sex',
+            'employees.civil_status',
+            'employees.height',
+            'employees.weight',
+            'employees.bloodtype',
+            'employees.highest_educational_attainment',
+            'employees.residential_address',
+            'employees.contact_number',
+            'employees.umid_id',
+            'employees.pagibig_id',
+            'employees.philhealth_number',
+            'employees.psn_number',
+            'employees.tin_number',
+            'employees.employment_status',
+            'employees.position',
+            'employees.date_hired',
+            'employees.is_active',
+            'users.username',
+            'users.email',
+            'departments.name as department_name',
+        ])
+            ->join('users', 'employees.user_id', '=', 'users.id')
+            ->join('departments', 'employees.department_id', '=', 'departments.id')
+            ->with([
+                'employment_history' => function ($query) {
+                    $query->select(
+                        'id',
+                        'employee_id',
+                        'previous_position',
+                        'new_position',
+                        'previous_employment_status',
+                        'new_employment_status',
+                        'effective_date',
+                        'remarks'
+                    )->orderBy('effective_date', 'desc');
+                }
+            ])
+            ->findOrFail($id);
+
+        // OPTIMIZED: Use already-loaded employment_history collection
+        // instead of making a new DB query inside calculateStepIncrement
         $stepIncrementInfo = $this->calculateStepIncrement($employee);
-        $loyaltyPayInfo = $this->calculateLoyaltyPay($employee);
-        $retirementInfo = $this->calculateRetirement($employee);
-
-
+        $loyaltyPayInfo    = $this->calculateLoyaltyPay($employee);
+        $retirementInfo    = $this->calculateRetirement($employee);
 
         return response()->json([
-            'id'                                => $employee->id,
-            'username'                          => $employee->user->username ?? null,
-            'email'                              => $employee->user->email ?? null,
-            'first_name'                         => $employee->first_name,
-            'middle_name'                        => $employee->middle_name,
-            'surname'                            => $employee->surname,
-            'id_number'                          => $employee->id_number,
-            'birthdate'                          => $employee->birthdate,
-            'place_of_birth'                     => $employee->place_of_birth,
-            'sex'                                => $employee->sex,
-            'civil_status'                       => $employee->civil_status,
-            'height'                             => $employee->height,
-            'weight'                             => $employee->weight,
-            'bloodtype'                          => $employee->bloodtype,
-            'highest_educational_attainment'     => $employee->highest_educational_attainment,
-            'residential_address'                => $employee->residential_address,
-            'contact_number'                     => $employee->contact_number,
-            'umid_id'                            => $employee->umid_id,
-            'pagibig_id'                         => $employee->pagibig_id,
-            'philhealth_number'                  => $employee->philhealth_number,
-            'psn_number'                         => $employee->psn_number,
-            'tin_number'                         => $employee->tin_number,
-            'employment_status'                  => $employee->employment_status,
-            'position'                           => $employee->position,
-            'department'                         => $employee->department->name ?? null,
-            'date_hired'                         => $employee->date_hired,
-            'employment_history'                 => $employee->employment_history,
-            'step_increment'                     => $stepIncrementInfo,
-            'loyalty_pay'                        => $loyaltyPayInfo,
-            'retirement'                         => $retirementInfo,
-            'is_active'                          => $employee->is_active,
+            'id'                             => $employee->id,
+            'username'                       => $employee->username,
+            'email'                          => $employee->email,
+            'first_name'                     => $employee->first_name,
+            'middle_name'                    => $employee->middle_name,
+            'surname'                        => $employee->surname,
+            'id_number'                      => $employee->id_number,
+            'birthdate'                      => $employee->birthdate,
+            'place_of_birth'                 => $employee->place_of_birth,
+            'sex'                            => $employee->sex,
+            'civil_status'                   => $employee->civil_status,
+            'height'                         => $employee->height,
+            'weight'                         => $employee->weight,
+            'bloodtype'                      => $employee->bloodtype,
+            'highest_educational_attainment' => $employee->highest_educational_attainment,
+            'residential_address'            => $employee->residential_address,
+            'contact_number'                 => $employee->contact_number,
+            'umid_id'                        => $employee->umid_id,
+            'pagibig_id'                     => $employee->pagibig_id,
+            'philhealth_number'              => $employee->philhealth_number,
+            'psn_number'                     => $employee->psn_number,
+            'tin_number'                     => $employee->tin_number,
+            'employment_status'              => $employee->employment_status,
+            'position'                       => $employee->position,
+            'department'                     => $employee->department_name,
+            'date_hired'                     => $employee->date_hired,
+            'employment_history'             => $employee->employment_history,
+            'step_increment'                 => $stepIncrementInfo,
+            'loyalty_pay'                    => $loyaltyPayInfo,
+            'retirement'                     => $retirementInfo,
+            'is_active'                      => $employee->is_active,
         ]);
     }
+
 
 
     public function update(Request $request, string $id)
@@ -275,7 +408,8 @@ class EmployeeController extends Controller
             'employment_status'                => 'sometimes|in:permanent,casual,elected,job_order',
             'date_hired'                       => 'sometimes|date',
         ]);
-
+        // OPTIMIZED: single findOrFail, no redundant queries
+        $employee = Employee::findOrFail($id);
         $employee->update($validated);
 
         return response()->json([
@@ -359,48 +493,91 @@ class EmployeeController extends Controller
     //         'history'         => $history,
     //     ];
     // }
+    // public function calculateStepIncrement($employee)
+    // {
+    //     $latestReset = $employee->employment_history()
+    //         ->where(function ($query) {
+    //             $query->where('new_employment_status', 'permanent')
+    //                 ->orWhereColumn('new_position', '!=', 'previous_position');
+    //         })
+    //         ->orderBy('effective_date', 'desc')
+    //         ->first();
+
+    //     if (!$latestReset || $employee->employment_status !== 'permanent') {
+    //         return [
+    //             'current_step' => null,
+    //             'message' => 'Not applicable - employee is not permanent',
+    //             'all_steps' => [],
+    //         ];
+    //     }
+
+    //     $startDate = \Carbon\Carbon::parse($latestReset->effective_date);
+    //     $yearsServed = max(0, $startDate->diffInYears(now()));
+    //     $currentStep = min(8, max(1, floor($yearsServed / 3) + 1));
+
+    //     $nextStepDate = $startDate->copy()->addYears($currentStep * 3);
+
+    //     // Build ALL 8 steps with their dates (past, current, future)
+    //     $allSteps = [];
+    //     for ($i = 1; $i <= 8; $i++) {
+    //         $stepDate = $startDate->copy()->addYears(($i - 1) * 3);
+    //         $allSteps[] = [
+    //             'step'        => $i,
+    //             'date'        => $stepDate->format('Y-m-d'),
+    //             'status'      => $i < $currentStep ? 'reached' : ($i == $currentStep ? 'current' : 'upcoming'),
+    //         ];
+    //     }
+
+    //     return [
+    //         'current_step'    => (int) $currentStep,
+    //         'since'           => $startDate->format('Y-m-d'),
+    //         'next_step_date'  => $currentStep < 8 ? $nextStepDate->format('Y-m-d') : null,
+    //         'all_steps'       => $allSteps,
+    //     ];
+    // }
     public function calculateStepIncrement($employee)
     {
-        $latestReset = $employee->employment_history()
-            ->where(function ($query) {
-                $query->where('new_employment_status', 'permanent')
-                    ->orWhereColumn('new_position', '!=', 'previous_position');
-            })
-            ->orderBy('effective_date', 'desc')
-            ->first();
+        // OPTIMIZED: Use already-loaded collection instead of new DB query
+        $employmentHistory = $employee->relationLoaded('employment_history')
+            ? $employee->employment_history
+            : $employee->employment_history()->orderBy('effective_date', 'desc')->get();
+
+        $latestReset = $employmentHistory->first(function ($history) {
+            return $history->new_employment_status === 'permanent'
+                || $history->new_position !== $history->previous_position;
+        });
 
         if (!$latestReset || $employee->employment_status !== 'permanent') {
             return [
                 'current_step' => null,
-                'message' => 'Not applicable - employee is not permanent',
-                'all_steps' => [],
+                'message'      => 'Not applicable - employee is not permanent',
+                'all_steps'    => [],
             ];
         }
 
-        $startDate = \Carbon\Carbon::parse($latestReset->effective_date);
+        $startDate   = \Carbon\Carbon::parse($latestReset->effective_date);
         $yearsServed = max(0, $startDate->diffInYears(now()));
         $currentStep = min(8, max(1, floor($yearsServed / 3) + 1));
-
         $nextStepDate = $startDate->copy()->addYears($currentStep * 3);
 
-        // Build ALL 8 steps with their dates (past, current, future)
         $allSteps = [];
         for ($i = 1; $i <= 8; $i++) {
-            $stepDate = $startDate->copy()->addYears(($i - 1) * 3);
+            $stepDate   = $startDate->copy()->addYears(($i - 1) * 3);
             $allSteps[] = [
-                'step'        => $i,
-                'date'        => $stepDate->format('Y-m-d'),
-                'status'      => $i < $currentStep ? 'reached' : ($i == $currentStep ? 'current' : 'upcoming'),
+                'step'   => $i,
+                'date'   => $stepDate->format('Y-m-d'),
+                'status' => $i < $currentStep ? 'reached' : ($i === $currentStep ? 'current' : 'upcoming'),
             ];
         }
 
         return [
-            'current_step'    => (int) $currentStep,
-            'since'           => $startDate->format('Y-m-d'),
-            'next_step_date'  => $currentStep < 8 ? $nextStepDate->format('Y-m-d') : null,
-            'all_steps'       => $allSteps,
+            'current_step'   => (int) $currentStep,
+            'since'          => $startDate->format('Y-m-d'),
+            'next_step_date' => $currentStep < 8 ? $nextStepDate->format('Y-m-d') : null,
+            'all_steps'      => $allSteps,
         ];
     }
+
     private function calculateLoyaltyPay($employee)
     {
         $startDate = \Carbon\Carbon::parse($employee->date_hired);
@@ -449,22 +626,39 @@ class EmployeeController extends Controller
         ];
     }
 
+    // public function destroy(string $id)
+    // {
+
+    //     $user = request()->user();
+
+    //     if (!$user || $user->role !== "hr_admin") {
+
+    //         return response()->json([
+    //             'message' => 'Forbidden'
+    //         ], 403);
+    //     }
+    //     $employee = Employee::findOrFail($id);
+
+    //     $employee->update(['is_active' => false]);
+    //     return response()->json([
+    //         'message' => 'Employee deactivated successfully',
+    //     ]);
+    // }
     public function destroy(string $id)
     {
-
+        // OPTIMIZED: check auth first before any DB query
         $user = request()->user();
-
-        if (!$user || $user->role !== "hr_admin") {
-
-            return response()->json([
-                'message' => 'Forbidden'
-            ], 403);
+        if (!$user || $user->role !== 'hr_admin') {
+            return response()->json(['message' => 'Forbidden'], 403);
         }
-        $employee = Employee::findOrFail($id);
 
-        $employee->update(['is_active' => false]);
-        return response()->json([
-            'message' => 'Employee deactivated successfully',
-        ]);
+        // Single query: find and update in one go
+        $affected = Employee::where('id', $id)->update(['is_active' => false]);
+
+        if (!$affected) {
+            return response()->json(['message' => 'Employee not found'], 404);
+        }
+
+        return response()->json(['message' => 'Employee deactivated successfully']);
     }
 }

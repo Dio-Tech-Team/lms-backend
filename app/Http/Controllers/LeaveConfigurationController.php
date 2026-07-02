@@ -7,87 +7,120 @@ use App\Models\LeaveConfiguration;
 
 class LeaveConfigurationController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
-        $config = LeaveConfiguration::all();
-        return response()->json($config);
+        // Vertical partitioning - no SELECT *
+        $configs = LeaveConfiguration::select([
+            'id',
+            'name',
+            'code',
+            'application_to',
+            'can_carry_over',
+            'can_monetize',
+            'fixed_days',
+            'monthly_credit',
+            'credit_type',
+            'description',
+        ])->get();
+
+        return response()->json($configs);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        $validatedData = $request->validate([
-            'name' => 'required|string|max:255',
-            'code' => 'required|string|max:50|unique:leave_configurations,code',
+        $validated = $request->validate([
+            'name'           => 'required|string|max:255',
+            'code'           => 'required|string|max:50|unique:leave_configurations,code',
             'application_to' => 'required|in:permanent,casual,elected,all',
             'can_carry_over' => 'boolean',
-            'can_monetize' => 'boolean',
-            'fixed_days' => 'nullable|numeric',
+            'can_monetize'   => 'boolean',
+            'fixed_days'     => 'nullable|numeric',
             'monthly_credit' => 'nullable|numeric',
-            'credit_type' => 'nullable|in:fixed,monthly',
-            'description' => 'nullable|string',
+            'credit_type'    => 'nullable|in:fixed,monthly',
+            'description'    => 'nullable|string',
         ]);
 
-        $config = LeaveConfiguration::create($validatedData);
+        $config = LeaveConfiguration::create($validated);
 
         return response()->json([
             'message' => 'Leave configuration created successfully',
-            'data' => $config
+            'data'    => $config->only([
+                'id',
+                'name',
+                'code',
+                'application_to',
+                'can_carry_over',
+                'can_monetize',
+                'fixed_days',
+                'monthly_credit',
+                'credit_type',
+                'description'
+            ])
         ], 201);
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(string $id)
     {
-        $config = LeaveConfiguration::findOrFail($id);
+        // Vertical partitioning
+        $config = LeaveConfiguration::select([
+            'id',
+            'name',
+            'code',
+            'application_to',
+            'can_carry_over',
+            'can_monetize',
+            'fixed_days',
+            'monthly_credit',
+            'credit_type',
+            'description',
+        ])->findOrFail($id);
+
         return response()->json($config);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, string $id)
     {
-        $config = LeaveConfiguration::findOrFail($id);
-
-        $validateData = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'code' => 'sometimes|required|string|max:50|unique:leave_configurations,code,' . $id,
+        $validated = $request->validate([
+            'name'           => 'sometimes|required|string|max:255',
+            'code'           => 'sometimes|required|string|max:50|unique:leave_configurations,code,' . $id,
             'application_to' => 'sometimes|required|in:permanent,casual,elected,all',
             'can_carry_over' => 'sometimes|boolean',
-            'can_monetize' => 'sometimes|boolean',
-            'fixed_days' => 'nullable|numeric',
+            'can_monetize'   => 'sometimes|boolean',
+            'fixed_days'     => 'nullable|numeric',
             'monthly_credit' => 'nullable|numeric',
-            'credit_type' => 'nullable|in:fixed,monthly',
-            'description' => 'nullable|string',
+            'credit_type'    => 'nullable|in:fixed,monthly',
+            'description'    => 'nullable|string',
         ]);
 
-        $config->update($validateData);
+        $config = LeaveConfiguration::findOrFail($id);
+        $config->update($validated);
 
         return response()->json([
             'message' => 'Leave configuration updated successfully',
-            'data' => $config
+            'data'    => $config->only([
+                'id',
+                'name',
+                'code',
+                'application_to',
+                'can_carry_over',
+                'can_monetize',
+                'fixed_days',
+                'monthly_credit',
+                'credit_type',
+                'description'
+            ])
         ]);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(string $id)
     {
-        $config = LeaveConfiguration::findOrFail($id);
+        // OPTIMIZED: single query instead of findOrFail + delete
+        $affected = LeaveConfiguration::where('id', $id)->delete();
 
-        $config->delete();
+        if (!$affected) {
+            return response()->json(['message' => 'Leave configuration not found'], 404);
+        }
 
-        return response()->json([
-            'message' => 'Leave configuration deleted successfully'
-        ]);
+        return response()->json(['message' => 'Leave configuration deleted successfully']);
     }
 }

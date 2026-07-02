@@ -19,6 +19,7 @@ return new class extends Migration
             $table->decimal('used_credits', 8, 3)->default(0);
             $table->decimal('remaining_balance', 8, 3)->default(0);
             $table->year('year');
+            $table->index('year');
             $table->timestamp('last_updated')->nullable();
             $table->timestamps();
         });

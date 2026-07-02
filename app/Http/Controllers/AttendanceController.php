@@ -25,13 +25,7 @@ class AttendanceController extends Controller
 
     public function upload(Request $request)
     {
-        // return response()->json([
-        //     'all' => $request->all(),
-        //     'files' => $request->files->all(),
-        //     'allFiles' => $request->allFiles(),
-        //     'hasFile' => $request->hasFile('file'),
-        //     'file_instance' => $request->file('file'),
-        // ]);
+
         $request->validate([
             'file'       => 'required|file|mimes:xlsx,xls,csv',
             'month'      => 'required|integer|min:1|max:12',
@@ -121,52 +115,8 @@ class AttendanceController extends Controller
             'results' => $results,
             'errors'  => $errors,
         ]);
-        // return response()->json([
-        //     'all' => $request->all(),
-        //     'hasFile' => $request->hasFile('file'),
-        //     'file' => $request->file('file'),
-        //     'content_type' => $request->header('Content-Type'),
-        // ]);
-
     }
 
-    // private function findEmployeeByName(string $name)
-    // {
-    //     // Expected format: "SURNAME, FIRSTNAME M."
-    //     $parts = explode(',', $name);
-    //     if (count($parts) < 2) return null;
-
-    //     $surname = trim($parts[0]);
-    //     $firstNamePart = trim($parts[1]);
-
-    //     return Employee::whereRaw('LOWER(surname) = ?', [strtolower($surname)])
-    //         ->whereRaw('LOWER(first_name) LIKE ?', [strtolower(substr($firstNamePart, 0, 3)) . '%'])
-    //         ->first();
-    // }
-
-    // private function findEmployeeByName(string $name)
-    // {
-    //     $parts = explode(',', $name);
-    //     if (count($parts) < 2) return null;
-
-    //     $surname = trim($parts[0]);
-    //     $firstPart = trim($parts[1]);
-
-    //     // remove dot (C.)
-    //     $firstPart = str_replace('.', '', $firstPart);
-
-    //     $pieces = explode(' ', $firstPart);
-
-    //     $firstName = trim($pieces[0] ?? '');
-    //     $middleInitial = trim($pieces[1] ?? '');
-
-    //     return Employee::whereRaw('LOWER(surname) = ?', [strtolower($surname)])
-    //         ->whereRaw('LOWER(first_name) = ?', [strtolower($firstName)])
-    //         ->when($middleInitial, function ($q) use ($middleInitial) {
-    //             $q->whereRaw('LEFT(LOWER(middle_name), 1) = ?', [strtolower($middleInitial)]);
-    //         })
-    //         ->first();
-    // }
     private function findEmployeeByName(string $name)
     {
         $parts = explode(',', $name);
@@ -201,7 +151,29 @@ class AttendanceController extends Controller
         $dates = array_filter(array_map('trim', explode(',', $dateString)));
         return count($dates);
     }
+    public function index(Request $request)
+    {
+        $query = \App\Models\Attendance::with('employee:id,first_name,middle_name,surname,department_id', 'employee.department:id,name');
 
+        if ($request->filled('month')) {
+            $monthName = \Carbon\Carbon::create(null, $request->month, 1)->format('F');
+            $query->where('month', $monthName);
+        }
+
+        if ($request->filled('year')) {
+            $query->where('year', $request->year);
+        }
+
+        if ($request->filled('department_id')) {
+            $query->whereHas('employee', function ($q) use ($request) {
+                $q->where('department_id', $request->department_id);
+            });
+        }
+
+        $summaries = $query->orderBy('created_at', 'desc')->get();
+
+        return response()->json($summaries);
+    }
     private function parseMinutes($value): int
 
     {

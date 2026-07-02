@@ -48,27 +48,39 @@ class EmployeeSeeder extends Seeder
                     'password' => Hash::make('Password@123'),
                     'role'     => 'employee',
                 ]);
-
                 $employee = Employee::create([
-                    'user_id'                          => $user->id,
-                    'department_id'                     => $department->id,
-                    'first_name'                        => $emp['first_name'],
-                    'middle_name'                        => $emp['middle_name'],
-                    'surname'                            => $emp['surname'],
-                    'id_number'                          => 'LGU-2026-' . str_pad($index + 1, 3, '0', STR_PAD_LEFT),
-                    'birthdate'                          => '1995-01-01',
-                    'place_of_birth'                     => 'Echague, Isabela',
-                    'sex'                                => 'male',
-                    'civil_status'                       => 'single',
-                    'highest_educational_attainment'     => 'college',
-                    'residential_address'                => 'Echague, Isabela',
-                    'contact_number'                     => '09171234567',
-                    'employment_status'                  => 'permanent',
-                    'position'                           => 'Staff',
-                    'date_hired'                         => '2020-01-01',
-                    'is_active'                          => true,
-                ]);
+                    'user_id'                        => $user->id,
+                    'department_id'                  => $department->id,
+                    'first_name'                     => $emp['first_name'],
+                    'middle_name'                    => $emp['middle_name'],
+                    'surname'                        => $emp['surname'],
+                    'id_number'                      => 'LGU-2026-' . str_pad($index + 1, 3, '0', STR_PAD_LEFT),
+                    'birthdate'                      => '1995-01-01',
+                    'place_of_birth'                 => 'Echague, Isabela',
+                    'sex'                            => 'male',
+                    'civil_status'                   => 'single',
 
+                    // --- Added Physical Attributes ---
+                    'height'                         => 170, // or '170 cm' depending on your column type
+                    'weight'                         => 65,  // or '65 kg'
+                    'bloodtype'                      => 'O+',
+
+                    'highest_educational_attainment' => 'college',
+                    'residential_address'            => 'Echague, Isabela',
+                    'contact_number'                 => '09171234567',
+
+                    // --- Added Gov IDs / System Numbers ---
+                    'umid_id'                        => 'CRN-0111-1234567-8',
+                    'pagibig_id'                     => '1234-5678-9012',
+                    'philhealth_number'              => '12-345678901-2',
+                    'psn_number'                     => '1234-5678-9012-3456', // PhilSys Card Number
+                    'tin_number'                     => '123-456-789-000',
+
+                    'employment_status'              => 'job_order',
+                    'position'                       => 'Encoder',
+                    'date_hired'                     => '2013-09-13',
+                    'is_active'                      => true,
+                ]);
                 EmploymentHistory::create([
                     'employee_id'                  => $employee->id,
                     'previous_position'            => null,

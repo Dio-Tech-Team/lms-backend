@@ -14,7 +14,8 @@ class DepartmentController extends Controller
     public function index()
     {
 
-        $departments = Department::where('is_active', true)->get();
+        $departments = Department::select(['id', 'name', 'code', 'is_active'])->where('is_active', true)
+            ->orderBy('name')->get();
 
         return response()->json([
             'message' => 'Departments retrieved successfully',
@@ -43,7 +44,7 @@ class DepartmentController extends Controller
 
         return response()->json([
             'message' => 'Department created successfully',
-            'data' => $department
+            'data'    => $department->only(['id', 'name', 'code', 'is_active'])
         ], 201);
     }
 
@@ -52,13 +53,16 @@ class DepartmentController extends Controller
      */
     public function show(string $id)
     {
-        $department = Department::findOrFail($id);
+        // Vertical partitioning
+        $department = Department::select(['id', 'name', 'code', 'is_active'])
+            ->findOrFail($id);
 
         return response()->json([
             'message' => 'Department retrieved successfully',
-            'data' => $department
-        ], 200);
+            'data'    => $department
+        ]);
     }
+
 
     /**
      * Update the specified resource in storage.
@@ -66,14 +70,15 @@ class DepartmentController extends Controller
     public function update(Request $request, string $id)
     {
 
-        $department = Department::findOrFail($id);
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'code' => 'sometimes|required|string|max:10|unique:departments,code,' . $id,
             'is_active' => 'boolean'
         ]);
-
+        // Single query: find and update
+        $department = Department::findOrFail($id);
         $department->update($validated);
+
 
         return response()->json([
             'message' => 'Department updated successfully',
@@ -92,5 +97,12 @@ class DepartmentController extends Controller
         return response()->json([
             'message' => 'Department deactivated successfully'
         ], 200);
+        // $affected = Department::where('id', $id)->update(['is_active' => false]);
+
+        // if (!$affected) {
+        //     return response()->json(['message' => 'Department not found'], 404);
+        // }
+
+        // return response()->json(['message' => 'Department deactivated successfully']);
     }
 }
