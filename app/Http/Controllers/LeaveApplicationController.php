@@ -20,7 +20,7 @@ class LeaveApplicationController extends Controller
         $applications = LeaveApplication::select([
             'leave_applications.id',
             'leave_applications.employee_id',
-            'leave_applications.leave_config_id',
+            'leave_applications.leave_configuration_id',
             'leave_applications.start_date',
             'leave_applications.end_date',
             'leave_applications.days_applied',
@@ -36,7 +36,7 @@ class LeaveApplicationController extends Controller
             'users.username as reviewed_by_username',
         ])
             ->join('employees', 'leave_applications.employee_id', '=', 'employees.id')
-            ->join('leave_configurations', 'leave_applications.leave_config_id', '=', 'leave_configurations.id')
+            ->join('leave_configurations', 'leave_applications.leave_configuration_id', '=', 'leave_configurations.id')
             ->leftJoin('users', 'leave_applications.reviewed_by', '=', 'users.id') // LEFT JOIN since reviewer may be null
             ->when($request->status, function ($query) use ($request) {
                 $query->where('leave_applications.status', $request->status); // uses status index!
@@ -50,7 +50,7 @@ class LeaveApplicationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'leave_config_id' => 'required|exists:leave_configurations,id',
+            'leave_configuration_id' => 'required|exists:leave_configurations,id',
             'start_date'      => 'required|date',
             'end_date'        => 'required|date|after_or_equal:start_date',
             'days_applied'    => 'required|numeric|min:0.5',
@@ -67,7 +67,7 @@ class LeaveApplicationController extends Controller
 
         // Fetch leave config once (store intermediate result)
         $config = LeaveConfiguration::select(['id', 'code', 'name'])
-            ->findOrFail($validated['leave_config_id']);
+            ->findOrFail($validated['leave_configuration_id']);
 
         if ($config->code === 'WL' && $validated['days_applied'] > 3) {
             return response()->json([
@@ -77,7 +77,7 @@ class LeaveApplicationController extends Controller
 
         // FIXED: correct column names for credit lookup
         $credit = LeaveCredit::where('employee_id', $employee->id)
-            ->where('leave_configuration_id', $validated['leave_config_id'])
+            ->where('leave_configuration_id', $validated['leave_configuration_id'])
             ->where('year', now()->year)
             ->first();
 
@@ -86,7 +86,7 @@ class LeaveApplicationController extends Controller
 
         $application = LeaveApplication::create([
             'employee_id'     => $employee->id,
-            'leave_config_id' => $validated['leave_config_id'],
+            'leave_configuration_id' => $validated['leave_configuration_id'],
             'start_date'      => $validated['start_date'],
             'end_date'        => $validated['end_date'],
             'days_applied'    => $validated['days_applied'],
@@ -115,7 +115,7 @@ class LeaveApplicationController extends Controller
 
         // FIXED: correct column name leave_configuration_id
         $credit = LeaveCredit::where('employee_id', $application->employee_id)
-            ->where('leave_configuration_id', $application->leave_config_id)
+            ->where('leave_configuration_id', $application->leave_configuration_id)
             ->where('year', now()->year)
             ->first();
 
@@ -129,7 +129,7 @@ class LeaveApplicationController extends Controller
 
             LeaveRecord::create([
                 'employee_id'     => $application->employee_id,
-                'leave_config_id' => $application->leave_config_id,
+                'leave_configuration_id' => $application->leave_configuration_id,
                 'recorded_by'     => $request->user()->id,
                 'start_date'      => $application->start_date,
                 'end_date'        => $application->end_date,
@@ -173,7 +173,7 @@ class LeaveApplicationController extends Controller
         $application = LeaveApplication::select([
             'leave_applications.id',
             'leave_applications.employee_id',
-            'leave_applications.leave_config_id',
+            'leave_applications.leave_configuration_id',
             'leave_applications.start_date',
             'leave_applications.end_date',
             'leave_applications.days_applied',
@@ -187,7 +187,7 @@ class LeaveApplicationController extends Controller
             'leave_configurations.code as leave_type_code',
         ])
             ->join('employees', 'leave_applications.employee_id', '=', 'employees.id')
-            ->join('leave_configurations', 'leave_applications.leave_config_id', '=', 'leave_configurations.id')
+            ->join('leave_configurations', 'leave_applications.leave_configuration_id', '=', 'leave_configurations.id')
             ->findOrFail($id);
 
         return response()->json($application);

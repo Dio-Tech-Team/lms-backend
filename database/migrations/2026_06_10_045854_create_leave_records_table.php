@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('leave_records', function (Blueprint $table) {
             $table->id();
             $table->foreignId('employee_id')->constrained('employees')->onDelete('cascade');
-            $table->foreignId('leave_config_id')->constrained('leave_configurations')->onDelete('cascade');
+            $table->foreignId('leave_configuration_id')->constrained('leave_configurations')->onDelete('cascade');
             $table->foreignId('recorded_by')->constrained('users')->onDelete('cascade');
             $table->date('start_date');
             $table->date('end_date');

@@ -11,7 +11,7 @@ class LeaveApplication extends Model
     protected $fillable = [
 
         'employee_id',
-        'leave_config_id',
+        'leave_configuration_id',
         'start_date',
         'end_date',
         'days_applied',
@@ -38,12 +38,11 @@ class LeaveApplication extends Model
 
     public function leaveConfiguration()
     {
-        return $this->belongsTo(LeaveConfiguration::class, 'leave_config_id');
+        return $this->belongsTo(LeaveConfiguration::class, 'leave_configuration_id');
     }
 
     public function reviewedBy()
     {
         return $this->belongsTo(User::class, 'reviewed_by');
     }
-    
 }

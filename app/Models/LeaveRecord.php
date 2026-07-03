@@ -10,7 +10,7 @@ class LeaveRecord extends Model
 {
     protected $fillable = [
         'employee_id',
-        'leave_config_id',
+        'leave_configuration_id',
         'recorded_by',
         'start_date',
         'end_date',
@@ -31,7 +31,7 @@ class LeaveRecord extends Model
 
     public function leaveConfiguration()
     {
-        return $this->belongsTo(LeaveConfiguration::class, 'leave_config_id');
+        return $this->belongsTo(LeaveConfiguration::class, 'leave_configuration_id');
     }
 
     public function recordedBy()

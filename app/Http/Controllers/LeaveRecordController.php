@@ -29,7 +29,7 @@ class LeaveRecordController extends Controller
             'users.username as recorded_by',
         ])
             ->join('employees', 'leave_records.employee_id', '=', 'employees.id')
-            ->join('leave_configurations', 'leave_records.leave_config_id', '=', 'leave_configurations.id')
+            ->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
             ->join('users', 'leave_records.recorded_by', '=', 'users.id')
             ->when($request->employee_id, function ($query) use ($request) {
                 $query->where('leave_records.employee_id', $request->employee_id);
@@ -44,7 +44,7 @@ class LeaveRecordController extends Controller
     {
         $validated = $request->validate([
             'employee_id'     => 'required|exists:employees,id',
-            'leave_config_id' => 'required|exists:leave_configurations,id',
+            'leave_configuration_id' => 'required|exists:leave_configurations,id',
             'start_date'      => 'required|date',
             'end_date'        => 'required|date|after_or_equal:start_date',
             'days_taken'      => 'required|numeric|min:0.5',
@@ -59,7 +59,7 @@ class LeaveRecordController extends Controller
 
             // Update credit in same transaction
             LeaveCredit::where('employee_id', $validated['employee_id'])
-                ->where('leave_configuration_id', $validated['leave_config_id'])
+                ->where('leave_configuration_id', $validated['leave_configuration_id'])
                 ->where('year', now()->year)
                 ->update([
                     'used_credits'      => DB::raw('used_credits + ' . $validated['days_taken']),
@@ -75,7 +75,7 @@ class LeaveRecordController extends Controller
             'record'  => $record->only([
                 'id',
                 'employee_id',
-                'leave_config_id',
+                'leave_configuration_id',
                 'start_date',
                 'end_date',
                 'days_taken',
@@ -102,7 +102,7 @@ class LeaveRecordController extends Controller
             'users.username as recorded_by',
         ])
             ->join('employees', 'leave_records.employee_id', '=', 'employees.id')
-            ->join('leave_configurations', 'leave_records.leave_config_id', '=', 'leave_configurations.id')
+            ->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
             ->join('users', 'leave_records.recorded_by', '=', 'users.id')
             ->findOrFail($id);
 
@@ -145,12 +145,12 @@ class LeaveRecordController extends Controller
         ])
             ->join('departments', 'employees.department_id', '=', 'departments.id')
             ->withSum(['leaveRecords as vl_used' => function ($query) {
-                $query->join('leave_configurations', 'leave_records.leave_config_id', '=', 'leave_configurations.id')
+                $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
                     ->where('leave_configurations.code', 'VL')
                     ->whereYear('leave_records.created_at', now()->year);
             }], 'days_taken')
             ->withSum(['leaveRecords as sl_used' => function ($query) {
-                $query->join('leave_configurations', 'leave_records.leave_config_id', '=', 'leave_configurations.id')
+                $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
                     ->where('leave_configurations.code', 'SL')
                     ->whereYear('leave_records.created_at', now()->year);
             }], 'days_taken')
@@ -165,7 +165,7 @@ class LeaveRecordController extends Controller
         $record = LeaveRecord::select([
             'id',
             'employee_id',
-            'leave_config_id',
+            'leave_configuration_id',
             'days_taken'
         ])->findOrFail($id);
 
@@ -173,7 +173,7 @@ class LeaveRecordController extends Controller
         // FIXED: wrong column name leave_config_id → leave_configuration_id
         DB::transaction(function () use ($record) {
             LeaveCredit::where('employee_id', $record->employee_id)
-                ->where('leave_configuration_id', $record->leave_config_id) // Fixed!
+                ->where('leave_configuration_id', $record->leave_configuration_id) // Fixed!
                 ->where('year', now()->year)
                 ->update([
                     'used_credits'      => DB::raw('used_credits - ' . $record->days_taken),
