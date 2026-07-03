@@ -40,7 +40,8 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'username' => $user->username,
                 'email' => $user->email,
-                'role' => $user->role
+                'role' => $user->role,
+                'employee_id' => $user->employee?->id, 
             ]
 
         ]);
@@ -62,12 +63,14 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         $user = $request->user();
+        $employee = \App\Models\Employee::where('user_id', $user->id)->first();
 
         return response()->json([
             'id'       => $user->id,
             'username' => $user->username,
             'email'    => $user->email,
             'role'     => $user->role,
+            'employee_id' => $employee?->id,
         ]);
     }
 }
