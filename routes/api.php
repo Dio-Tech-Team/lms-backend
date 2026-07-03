@@ -54,12 +54,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Leave Record Routes
     // Leave Record Routes - HR can only view, update, delete
+    Route::get('leave-records/summary', [LeaveRecordController::class, 'summary']);
+
+
     Route::get('leave-records', [LeaveRecordController::class, 'index']);
     Route::get('leave-records/{id}', [LeaveRecordController::class, 'show']);
     Route::put('leave-records/{id}', [LeaveRecordController::class, 'update']);
     Route::delete('leave-records/{id}', [LeaveRecordController::class, 'destroy']);
-
-
 
     // Leave Application Routes
     Route::get('leave-applications', [LeaveApplicationController::class, 'index']);

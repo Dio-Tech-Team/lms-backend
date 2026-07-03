@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\LeaveRecord;
 use App\Models\LeaveCredit;
+use App\Models\Employee;
 use Illuminate\Support\Facades\DB;
 
 class LeaveRecordController extends Controller
@@ -108,6 +109,7 @@ class LeaveRecordController extends Controller
         return response()->json($record);
     }
 
+
     public function update(Request $request, string $id)
     {
         $validated = $request->validate([
@@ -131,6 +133,31 @@ class LeaveRecordController extends Controller
                 'remarks'
             ]),
         ]);
+    }
+    public function summary()
+    {
+        $summary = Employee::select([
+            'employees.id',
+            'employees.first_name',
+            'employees.surname',
+            'employees.position',
+            'departments.name as department_name',
+        ])
+            ->join('departments', 'employees.department_id', '=', 'departments.id')
+            ->withSum(['leaveRecords as vl_used' => function ($query) {
+                $query->join('leave_configurations', 'leave_records.leave_config_id', '=', 'leave_configurations.id')
+                    ->where('leave_configurations.code', 'VL')
+                    ->whereYear('leave_records.created_at', now()->year);
+            }], 'days_taken')
+            ->withSum(['leaveRecords as sl_used' => function ($query) {
+                $query->join('leave_configurations', 'leave_records.leave_config_id', '=', 'leave_configurations.id')
+                    ->where('leave_configurations.code', 'SL')
+                    ->whereYear('leave_records.created_at', now()->year);
+            }], 'days_taken')
+            ->where('employees.is_active', true)
+            ->paginate(10);
+
+        return response()->json($summary);
     }
 
     public function destroy(string $id)

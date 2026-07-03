@@ -42,7 +42,7 @@ class LeaveApplicationController extends Controller
                 $query->where('leave_applications.status', $request->status); // uses status index!
             })
             ->orderBy('leave_applications.created_at', 'desc')
-            ->paginate(15);
+            ->paginate(10);
 
         return response()->json($applications);
     }
