@@ -35,7 +35,19 @@ class LeaveRecordController extends Controller
                 $query->where('leave_records.employee_id', $request->employee_id);
             })
             ->orderBy('leave_records.created_at', 'desc')
+            ->when($request->search, function ($query) use ($request) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('employees.first_name', 'LIKE', '%' . $request->search . '%')
+                        ->orWhere('employees.surname', 'LIKE', '%' . $request->search . '%');
+                });
+            })
+            ->when($request->year, function ($query) use ($request) {
+                $query->whereYear('leave_records.created_at', $request->year);
+            })->when($request->leave_type, function ($query) use ($request) {
+                $query->where('leave_configurations.code', $request->leave_type);
+            })
             ->paginate(15);
+
 
         return response()->json($records);
     }
@@ -134,8 +146,35 @@ class LeaveRecordController extends Controller
             ]),
         ]);
     }
-    public function summary()
+    // public function summary()
+    // {
+    //     $summary = Employee::select([
+    //         'employees.id',
+    //         'employees.first_name',
+    //         'employees.surname',
+    //         'employees.position',
+    //         'departments.name as department_name',
+    //     ])
+    //         ->join('departments', 'employees.department_id', '=', 'departments.id')
+    //         ->withSum(['leaveRecords as vl_used' => function ($query) {
+    //             $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
+    //                 ->where('leave_configurations.code', 'VL')
+    //                 ->whereYear('leave_records.created_at', now()->year);
+    //         }], 'days_taken')
+    //         ->withSum(['leaveRecords as sl_used' => function ($query) {
+    //             $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
+    //                 ->where('leave_configurations.code', 'SL')
+    //                 ->whereYear('leave_records.created_at', now()->year);
+    //         }], 'days_taken')
+    //         ->where('employees.is_active', true)
+    //         ->paginate(10);
+
+    //     return response()->json($summary);
+    // }
+    public function summary(Request $request)
     {
+        $year = $request->year ?? now()->year;
+
         $summary = Employee::select([
             'employees.id',
             'employees.first_name',
@@ -144,17 +183,23 @@ class LeaveRecordController extends Controller
             'departments.name as department_name',
         ])
             ->join('departments', 'employees.department_id', '=', 'departments.id')
-            ->withSum(['leaveRecords as vl_used' => function ($query) {
+            ->withSum(['leaveRecords as vl_used' => function ($query) use ($year) {
                 $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
                     ->where('leave_configurations.code', 'VL')
-                    ->whereYear('leave_records.created_at', now()->year);
+                    ->whereYear('leave_records.created_at', $year);
             }], 'days_taken')
-            ->withSum(['leaveRecords as sl_used' => function ($query) {
+            ->withSum(['leaveRecords as sl_used' => function ($query) use ($year) {
                 $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
                     ->where('leave_configurations.code', 'SL')
-                    ->whereYear('leave_records.created_at', now()->year);
+                    ->whereYear('leave_records.created_at', $year);
             }], 'days_taken')
             ->where('employees.is_active', true)
+            ->when($request->search, function ($query) use ($request) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('employees.first_name', 'LIKE', '%' . $request->search . '%')
+                        ->orWhere('employees.surname', 'LIKE', '%' . $request->search . '%');
+                });
+            })
             ->paginate(10);
 
         return response()->json($summary);
