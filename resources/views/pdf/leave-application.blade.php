@@ -91,7 +91,7 @@
                 <strong>2. NAME:</strong>
                 <table style="width:100%; border:none;">
                     <tr style="border:none;">
-                        <td style="border:none; width:33%;">(Last)<br>{{ $application->employee->last_name }}</td>
+                        <td style="border:none; width:33%;">(Last)<br>{{ $application->employee->surname }}</td>
                         <td style="border:none; width:33%;">(First)<br>{{ $application->employee->first_name }}</td>
                         <td style="border:none; width:34%;">(Middle)<br>{{ $application->employee->middle_name }}</td>
                     </tr>
