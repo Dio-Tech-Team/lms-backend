@@ -41,10 +41,19 @@ class LeaveRecordController extends Controller
                         ->orWhere('employees.surname', 'LIKE', '%' . $request->search . '%');
                 });
             })
-            ->when($request->year, function ($query) use ($request) {
-                $query->whereYear('leave_records.created_at', $request->year);
-            })->when($request->leave_type, function ($query) use ($request) {
+            // ->when($request->year, function ($query) use ($request) {
+            //     $query->whereYear('leave_records.created_at', $request->year);
+            // })->when($request->leave_type, function ($query) use ($request) {
+            //     $query->where('leave_configurations.code', $request->leave_type);
+            // })
+            ->when($request->filled('year'), function ($query) use ($request) {
+                $query->whereYear('leave_records.start_date', $request->year);
+            })
+            ->when($request->filled('leave_type'), function ($query) use ($request) {
                 $query->where('leave_configurations.code', $request->leave_type);
+            })
+            ->when($request->department_id, function ($query) use ($request) {
+                $query->where('employees.department_id', $request->department_id);
             })
             ->paginate(15);
 
@@ -199,6 +208,9 @@ class LeaveRecordController extends Controller
                     $q->where('employees.first_name', 'LIKE', '%' . $request->search . '%')
                         ->orWhere('employees.surname', 'LIKE', '%' . $request->search . '%');
                 });
+            })
+            ->when($request->department_id, function ($query) use ($request) {  // ← add this
+                $query->where('employees.department_id', $request->department_id);
             })
             ->paginate(10);
 

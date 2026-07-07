@@ -36,13 +36,26 @@ class LeaveApplicationController extends Controller
             'users.username as reviewed_by_username',
         ])
             ->join('employees', 'leave_applications.employee_id', '=', 'employees.id')
+            ->join('departments', 'employees.department_id', '=', 'departments.id')
             ->join('leave_configurations', 'leave_applications.leave_configuration_id', '=', 'leave_configurations.id')
             ->leftJoin('users', 'leave_applications.reviewed_by', '=', 'users.id') // LEFT JOIN since reviewer may be null
             ->when($request->status, function ($query) use ($request) {
                 $query->where('leave_applications.status', $request->status); // uses status index!
             })
+            ->when($request->department_id, function ($query) use ($request) {
+                $query->where('employees.department_id', $request->department_id);
+            })
+            ->when($request->year, function ($query) use ($request) {
+                $query->whereYear('leave_applications.applied_at', $request->year);
+            })
+            ->when($request->search, function ($query) use ($request) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('employees.first_name', 'LIKE', '%' . $request->search . '%')
+                        ->orWhere('employees.surname', 'LIKE', '%' . $request->search . '%');
+                });
+            })
             ->orderBy('leave_applications.created_at', 'desc')
-            ->paginate(10);
+            ->paginate(15);
 
         return response()->json($applications);
     }

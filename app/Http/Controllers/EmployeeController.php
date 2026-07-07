@@ -66,9 +66,9 @@ class EmployeeController extends Controller
     // }
     // OPTIMIZED: INNER JOIN instead of LEFT JOIN (with())
     // since every employee MUST have a user and department
-    public function index()
+    public function index(Request $request)
     {
-        $employees = Employee::select([
+        $query = Employee::select([
             'employees.id',
             'employees.first_name',
             'employees.middle_name',
@@ -83,8 +83,14 @@ class EmployeeController extends Controller
             'departments.name as department_name',
         ])
             ->join('users', 'employees.user_id', '=', 'users.id')
-            ->join('departments', 'employees.department_id', '=', 'departments.id')
-            ->paginate(10);
+            ->join('departments', 'employees.department_id', '=', 'departments.id');
+
+        // Apply department filter if present in request
+        if ($request->filled('department_id')) {
+            $query->where('employees.department_id', $request->department_id);
+        }
+        // Apply pagination
+        $employees = $query->paginate(10);
         // ->get()
         // ->map(function ($employee) {
         //     return [
