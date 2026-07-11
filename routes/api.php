@@ -27,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     //Employee Routes
+    Route::get('employees/stats', [EmployeeController::class, 'stats']);
     Route::apiResource('employees', EmployeeController::class);
 
     //Department Routes
@@ -51,6 +52,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('employees/{employeeId}/leave-credits', [LeaveCreditController::class, 'index']);
     Route::post('employees/{employeeId}/leave-credits/initialize', [LeaveCreditController::class, 'initializeCredits']);
     Route::put('employees/{employeeId}/leave-credits/{creditId}', [LeaveCreditController::class, 'update']);
+    // Add this line inside the auth:sanctum group in routes/api.php,
+    // anywhere near your other employee routes:
+
+    Route::get('employees/{id}/leave-card', [EmployeeController::class, 'leaveCard']);
+
+    // No ordering conflict here (unlike the /employees/stats route) since this
+    // path has an extra segment (/leave-card) that apiResource's
+    // employees/{employee} pattern doesn't match.
 
     // Leave Record Routes
     // Leave Record Routes - HR can only view, update, delete

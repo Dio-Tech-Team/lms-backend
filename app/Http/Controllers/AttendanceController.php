@@ -9,6 +9,7 @@ use App\Models\LeaveCredit;
 use App\Models\LeaveConfiguration;
 use App\Service\LeaveCreditComputationService;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class AttendanceController extends Controller
@@ -23,9 +24,209 @@ class AttendanceController extends Controller
         $this->computationService = $computationService;
     }
 
+    // public function upload(Request $request)
+    // {
+
+    //     $request->validate([
+    //         'file'       => 'required|file|mimes:xlsx,xls,csv',
+    //         'month'      => 'required|integer|min:1|max:12',
+    //         'year'       => 'required|integer',
+    //         'department' => 'nullable|string',
+    //     ]);
+
+    //     $file = $request->file('file');
+    //     $month = $request->month;
+    //     $year = $request->year;
+
+    //     $spreadsheet = IOFactory::load($file->getPathname());
+    //     $sheet = $spreadsheet->getActiveSheet();
+    //     $rows = $sheet->toArray();
+
+    //     $results = [];
+    //     $errors = [];
+
+    //     foreach ($rows as $index => $row) {
+    //         if ($index < 2) continue; // skip header
+
+    //         $name = trim($row[0] ?? '');
+    //         if (empty($name)) continue;
+    //         $employee = $this->findEmployeeByName($name);
+
+    //         if (!$employee) {
+    //             $errors[] = "Employee not found: {$name}";
+    //             continue;
+    //         }
+
+    //         $absentWithLeaveRaw = trim($row[2] ?? '');
+    //         $absentWithoutLeaveRaw = trim($row[3] ?? '');
+
+    //         $absentWithLeaveDays = $this->countDatesInString($absentWithLeaveRaw);
+    //         $absentWithoutLeaveDays = $this->countDatesInString($absentWithoutLeaveRaw);
+
+    //         $lateAm = $this->parseMinutes($row[4] ?? '');
+    //         $latePm = $this->parseMinutes($row[5] ?? '');
+    //         $utAm = $this->parseMinutes($row[6] ?? '');
+    //         $utPm = $this->parseMinutes($row[7] ?? '');
+
+    //         $computation = $this->computationService->computeMonthlyCredits([
+    //             'month'                       => $month,
+    //             'year'                        => $year,
+    //             'absent_with_leave_days'      => $absentWithLeaveDays,
+    //             'absent_without_leave_days'   => $absentWithoutLeaveDays,
+    //             'late_am_minutes'             => $lateAm,
+    //             'late_pm_minutes'             => $latePm,
+    //             'undertime_am_minutes'        => $utAm,
+    //             'undertime_pm_minutes'        => $utPm,
+    //         ]);
+
+
+    //         $summary = Attendance::create([
+    //             'employee_id'                 => $employee->id,
+    //             'month'                       => Carbon::create($year, $month, 1)->format('F'),
+    //             'year'                        => $year,
+    //             'total_working_days'          => 30,
+    //             'absent_with_leave_days'      => $absentWithLeaveDays,
+    //             'absent_without_leave_days'   => $absentWithoutLeaveDays,
+    //             'late_am_minutes'             => $lateAm,
+    //             'late_pm_minutes'             => $latePm,
+    //             'undertime_am_minutes'        => $utAm,
+    //             'undertime_pm_minutes'        => $utPm,
+    //             'vl_earned'                   => $computation['vl_earned'],
+    //             'sl_earned'                   => $computation['sl_earned'],
+    //             'tardiness_equivalent_days'   => $computation['tardiness_equivalent_days'],
+    //             'uploaded_by'                 => $request->user()->id,
+    //         ]);
+    //         $this->updateLeaveCredits($employee, $year, $computation);
+
+    //         $results[] = [
+    //             'employee' => $employee->first_name . ' ' . $employee->surname,
+    //             'vl_earned' => $computation['vl_earned'],
+    //             'sl_earned' => $computation['sl_earned'],
+    //             'tardiness_deducted' => $computation['tardiness_equivalent_days'],
+    //         ];
+    //     }
+
+    //     return response()->json([
+    //         'message' => 'Attendance processed successfully',
+    //         'results' => $results,
+    //         'errors'  => $errors,
+    //     ]);
+    // }
+    // public function upload(Request $request)
+    // {
+    //     $request->validate([
+    //         'file'       => 'required|file|mimes:xlsx,xls,csv',
+    //         'month'      => 'required|integer|min:1|max:12',
+    //         'year'       => 'required|integer',
+    //         'department' => 'nullable|string',
+    //     ]);
+
+    //     $file = $request->file('file');
+    //     $month = $request->month;
+    //     $year = $request->year;
+
+    //     $spreadsheet = IOFactory::load($file->getPathname());
+    //     $sheet = $spreadsheet->getActiveSheet();
+    //     $rows = $sheet->toArray();
+
+    //     $results = [];
+    //     $errors = [];
+
+    // Entire batch wrapped in one transaction. If any row throws mid-loop
+    // (DB error, unexpected computation failure, etc.), every Attendance +
+    // LeaveCredit write from THIS upload rolls back together — no
+    // partial/half-processed state where some employees got credited and
+    // others didn't within the same file.
+    //
+    // Employees that simply don't match a name (findEmployeeByName returns
+    // null) are unaffected by this — they were already being safely
+    // skipped via `continue` before any DB write, with no credit changes
+    // and no rollback needed for them specifically.
+    //     try {
+    //     DB::transaction(function () use ($rows, $month, $year, $request, &$results, &$errors) {
+    //             foreach ($rows as $index => $row) {
+    //                 if ($index < 2) continue; // skip header
+
+    //                 $name = trim($row[0] ?? '');
+    //                 if (empty($name)) continue;
+
+    //                 // Find employee by matching name (Surname, First M.)
+    //                 $employee = $this->findEmployeeByName($name);
+
+    //                 if (!$employee) {
+    //                     $errors[] = "Employee not found: {$name}";
+    //                     continue;
+    //                 }
+
+    //                 $absentWithLeaveRaw = trim($row[2] ?? '');
+    //                 $absentWithoutLeaveRaw = trim($row[3] ?? '');
+
+    //                 $absentWithLeaveDays = $this->countDatesInString($absentWithLeaveRaw);
+    //                 $absentWithoutLeaveDays = $this->countDatesInString($absentWithoutLeaveRaw);
+
+    //                 $lateAm = $this->parseMinutes($row[4] ?? '');
+    //                 $latePm = $this->parseMinutes($row[5] ?? '');
+    //                 $utAm = $this->parseMinutes($row[6] ?? '');
+    //                 $utPm = $this->parseMinutes($row[7] ?? '');
+
+    //                 $computation = $this->computationService->computeMonthlyCredits([
+    //                     'month'                       => $month,
+    //                     'year'                        => $year,
+    //                     'absent_with_leave_days'      => $absentWithLeaveDays,
+    //                     'absent_without_leave_days'   => $absentWithoutLeaveDays,
+    //                     'late_am_minutes'             => $lateAm,
+    //                     'late_pm_minutes'             => $latePm,
+    //                     'undertime_am_minutes'        => $utAm,
+    //                     'undertime_pm_minutes'        => $utPm,
+    //                 ]);
+
+    //                 // Save the attendance summary record
+    //                 Attendance::create([
+    //                     'employee_id'                 => $employee->id,
+    //                     'month'                       => Carbon::create($year, $month, 1)->format('F'),
+    //                     'year'                        => $year,
+    //                     'total_working_days'          => 30,
+    //                     'absent_with_leave_days'      => $absentWithLeaveDays,
+    //                     'absent_without_leave_days'   => $absentWithoutLeaveDays,
+    //                     'late_am_minutes'             => $lateAm,
+    //                     'late_pm_minutes'             => $latePm,
+    //                     'undertime_am_minutes'        => $utAm,
+    //                     'undertime_pm_minutes'        => $utPm,
+    //                     'vl_earned'                   => $computation['vl_earned'],
+    //                     'sl_earned'                   => $computation['sl_earned'],
+    //                     'tardiness_equivalent_days'   => $computation['tardiness_equivalent_days'],
+    //                     'uploaded_by'                 => $request->user()->id,
+    //                 ]);
+
+    //                 // Update Leave Credits
+    //                 $this->updateLeaveCredits($employee, $year, $computation);
+
+    //                 $results[] = [
+    //                     'employee' => $employee->first_name . ' ' . $employee->surname,
+    //                     'vl_earned' => $computation['vl_earned'],
+    //                     'sl_earned' => $computation['sl_earned'],
+    //                     'tardiness_deducted' => $computation['tardiness_equivalent_days'],
+    //                 ];
+    //             }
+    //         });
+    //     } catch (\Throwable $e) {
+    //         // Whole batch rolled back — nothing from this upload was saved.
+    //         return response()->json([
+    //             'message' => 'Attendance processing failed — no changes were saved. ' . $e->getMessage(),
+    //             'results' => [],
+    //             'errors'  => [],
+    //         ], 500);
+    //     }
+
+    //     return response()->json([
+    //         'message' => 'Attendance processed successfully',
+    //         'results' => $results,
+    //         'errors'  => $errors,
+    //     ]);
+    // }
+
     public function upload(Request $request)
     {
-
         $request->validate([
             'file'       => 'required|file|mimes:xlsx,xls,csv',
             'month'      => 'required|integer|min:1|max:12',
@@ -41,82 +242,122 @@ class AttendanceController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $rows = $sheet->toArray();
 
-        // Assume row 0 is the header row, data starts at row 1
         $results = [];
         $errors = [];
+        $skipped = [];
 
-        foreach ($rows as $index => $row) {
-            if ($index < 2) continue; // skip header
+        // Entire batch wrapped in one transaction. If any row throws mid-loop
+        // (DB error, unexpected computation failure, etc.), every Attendance +
+        // LeaveCredit write from THIS upload rolls back together — no
+        // partial/half-processed state where some employees got credited and
+        // others didn't within the same file.
+        //
+        // Employees that simply don't match a name (findEmployeeByName returns
+        // null) are unaffected by this — they were already being safely
+        // skipped via `continue` before any DB write, with no credit changes
+        // and no rollback needed for them specifically.
+        try {
+            DB::transaction(function () use ($rows, $month, $year, $request, &$results, &$errors, &$skipped) {
+                $monthName = Carbon::create($year, $month, 1)->format('F');
 
-            $name = trim($row[0] ?? '');
-            if (empty($name)) continue;
+                foreach ($rows as $index => $row) {
+                    if ($index < 2) continue; // skip header
 
-            // Find employee by matching name (Surname, First M.)
-            $employee = $this->findEmployeeByName($name);
+                    $name = trim($row[0] ?? '');
+                    if (empty($name)) continue;
 
-            if (!$employee) {
-                $errors[] = "Employee not found: {$name}";
-                continue;
-            }
+                    // Find employee by matching name (Surname, First M.)
+                    $employee = $this->findEmployeeByName($name);
 
-            $absentWithLeaveRaw = trim($row[2] ?? '');
-            $absentWithoutLeaveRaw = trim($row[3] ?? '');
+                    if (!$employee) {
+                        $errors[] = "Employee not found: {$name}";
+                        continue;
+                    }
 
-            $absentWithLeaveDays = $this->countDatesInString($absentWithLeaveRaw);
-            $absentWithoutLeaveDays = $this->countDatesInString($absentWithoutLeaveRaw);
+                    // SIMPLE DUPLICATE GUARD: if this employee already has an
+                    // attendance record for this exact month/year, skip them.
+                    // This lets you fix a typo and re-upload the SAME file
+                    // safely — everyone who already succeeded gets skipped
+                    // (no double-counted credits), only the newly-fixed row(s)
+                    // actually get processed.
+                    $alreadyExists = Attendance::where('employee_id', $employee->id)
+                        ->where('month', $monthName)
+                        ->where('year', $year)
+                        ->exists();
 
-            $lateAm = $this->parseMinutes($row[4] ?? '');
-            $latePm = $this->parseMinutes($row[5] ?? '');
-            $utAm = $this->parseMinutes($row[6] ?? '');
-            $utPm = $this->parseMinutes($row[7] ?? '');
+                    if ($alreadyExists) {
+                        $skipped[] = "{$employee->first_name} {$employee->surname}: already has attendance for {$monthName} {$year}, skipped.";
+                        continue;
+                    }
 
-            $computation = $this->computationService->computeMonthlyCredits([
-                'month'                       => $month,
-                'year'                        => $year,
-                'absent_with_leave_days'      => $absentWithLeaveDays,
-                'absent_without_leave_days'   => $absentWithoutLeaveDays,
-                'late_am_minutes'             => $lateAm,
-                'late_pm_minutes'             => $latePm,
-                'undertime_am_minutes'        => $utAm,
-                'undertime_pm_minutes'        => $utPm,
-            ]);
+                    $absentWithLeaveRaw = trim($row[2] ?? '');
+                    $absentWithoutLeaveRaw = trim($row[3] ?? '');
 
-            // Save the attendance summary record
-            $summary = Attendance::create([
-                'employee_id'                 => $employee->id,
-                'month'                       => Carbon::create($year, $month, 1)->format('F'),
-                'year'                        => $year,
-                'total_working_days'          => 30,
-                'absent_with_leave_days'      => $absentWithLeaveDays,
-                'absent_without_leave_days'   => $absentWithoutLeaveDays,
-                'late_am_minutes'             => $lateAm,
-                'late_pm_minutes'             => $latePm,
-                'undertime_am_minutes'        => $utAm,
-                'undertime_pm_minutes'        => $utPm,
-                'vl_earned'                   => $computation['vl_earned'],
-                'sl_earned'                   => $computation['sl_earned'],
-                'tardiness_equivalent_days'   => $computation['tardiness_equivalent_days'],
-                'uploaded_by'                 => $request->user()->id,
-            ]);
+                    $absentWithLeaveDays = $this->countDatesInString($absentWithLeaveRaw);
+                    $absentWithoutLeaveDays = $this->countDatesInString($absentWithoutLeaveRaw);
 
-            // Update Leave Credits
-            $this->updateLeaveCredits($employee, $year, $computation);
+                    $lateAm = $this->parseMinutes($row[4] ?? '');
+                    $latePm = $this->parseMinutes($row[5] ?? '');
+                    $utAm = $this->parseMinutes($row[6] ?? '');
+                    $utPm = $this->parseMinutes($row[7] ?? '');
 
-            $results[] = [
-                'employee' => $employee->first_name . ' ' . $employee->surname,
-                'vl_earned' => $computation['vl_earned'],
-                'sl_earned' => $computation['sl_earned'],
-                'tardiness_deducted' => $computation['tardiness_equivalent_days'],
-            ];
+                    $computation = $this->computationService->computeMonthlyCredits([
+                        'month'                       => $month,
+                        'year'                        => $year,
+                        'absent_with_leave_days'      => $absentWithLeaveDays,
+                        'absent_without_leave_days'   => $absentWithoutLeaveDays,
+                        'late_am_minutes'             => $lateAm,
+                        'late_pm_minutes'             => $latePm,
+                        'undertime_am_minutes'        => $utAm,
+                        'undertime_pm_minutes'        => $utPm,
+                    ]);
+
+                    // Save the attendance summary record
+                    Attendance::create([
+                        'employee_id'                 => $employee->id,
+                        'month'                       => $monthName,
+                        'year'                        => $year,
+                        'total_working_days'          => 30,
+                        'absent_with_leave_days'      => $absentWithLeaveDays,
+                        'absent_without_leave_days'   => $absentWithoutLeaveDays,
+                        'late_am_minutes'             => $lateAm,
+                        'late_pm_minutes'             => $latePm,
+                        'undertime_am_minutes'        => $utAm,
+                        'undertime_pm_minutes'        => $utPm,
+                        'vl_earned'                   => $computation['vl_earned'],
+                        'sl_earned'                   => $computation['sl_earned'],
+                        'tardiness_equivalent_days'   => $computation['tardiness_equivalent_days'],
+                        'uploaded_by'                 => $request->user()->id,
+                    ]);
+
+                    // Update Leave Credits
+                    $this->updateLeaveCredits($employee, $year, $computation);
+
+                    $results[] = [
+                        'employee' => $employee->first_name . ' ' . $employee->surname,
+                        'vl_earned' => $computation['vl_earned'],
+                        'sl_earned' => $computation['sl_earned'],
+                        'tardiness_deducted' => $computation['tardiness_equivalent_days'],
+                    ];
+                }
+            });
+        } catch (\Throwable $e) {
+            // Whole batch rolled back — nothing from this upload was saved.
+            return response()->json([
+                'message' => 'Attendance processing failed — no changes were saved. ' . $e->getMessage(),
+                'results' => [],
+                'errors'  => [],
+                'skipped' => [],
+            ], 500);
         }
 
         return response()->json([
             'message' => 'Attendance processed successfully',
             'results' => $results,
             'errors'  => $errors,
+            'skipped' => $skipped,
         ]);
     }
-
     private function findEmployeeByName(string $name)
     {
         $parts = explode(',', $name);
