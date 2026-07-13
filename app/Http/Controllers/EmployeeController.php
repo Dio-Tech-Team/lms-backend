@@ -11,6 +11,7 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use App\Models\LeaveConfiguration;
 use Illuminate\Validation\Rules\Password;
+use Carbon\Carbon;
 
 
 class EmployeeController extends Controller
@@ -498,7 +499,76 @@ class EmployeeController extends Controller
 
         return $entries;
     }
+    public function stepIncrementForecast(Request $request)
+    {
+        $request->validate([
+            'year' => 'required|integer|min:2020|max:2099',
+        ]);
 
+        $forecastYear = (int) $request->input('year');
+
+        // Fetch permanent employees along with their sorted employment history
+        $employees = Employee::where('employment_status', 'permanent')
+            ->where('is_active', true)
+            ->with(['department', 'employment_history' => function ($q) {
+                $q->orderBy('effective_date', 'desc');
+            }])
+            ->get();
+
+        $forecastRecords = [];
+
+        foreach ($employees as $employee) {
+            // Find the milestone date where their step reset due to permanency or promotion
+            $latestReset = $employee->employment_history->first(function ($history) {
+                return $history->new_employment_status === 'permanent'
+                    || $history->new_position !== $history->previous_position;
+            });
+
+            // Fallback to date_hired if no history record exists
+            $baseDate = $latestReset
+                ? Carbon::parse($latestReset->effective_date)
+                : ($employee->date_hired ? Carbon::parse($employee->date_hired) : null);
+
+            if (!$baseDate) continue;
+
+            // Calculate service years at the point of the future forecast year
+            $totalYearsAtForecast = $forecastYear - $baseDate->year;
+
+            // An increment only triggers on exact 3-year anniversaries relative to the reset date
+            if ($totalYearsAtForecast > 0 && $totalYearsAtForecast % 3 === 0) {
+
+                // Calculate current step stage right before this milestone hits
+                $currentStep = (int)(($totalYearsAtForecast - 3) / 3) + 1;
+                $nextStep = $currentStep + 1;
+
+                // Enforce government limits (Step 1 to Step 8)
+                $currentStepDisplay = min(max($currentStep, 1), 7);
+                $nextStepDisplay = min($nextStep, 8);
+
+                // Construct milestone date matching their anniversary month and day
+                $nextStepDate = Carbon::create(
+                    $forecastYear,
+                    $baseDate->month,
+                    $baseDate->day
+                )->format('Y-m-d');
+
+                $forecastRecords[] = [
+                    'employee_id'    => $employee->id,
+                    'name'           => "{$employee->first_name} {$employee->surname}",
+                    'position'       => $employee->position,
+                    'department'     => $employee->department?->name ?? 'Unassigned',
+                    'current_step'   => $currentStepDisplay,
+                    'next_step'      => $nextStepDisplay,
+                    'next_step_date' => $nextStepDate,
+                ];
+            }
+        }
+
+        return response()->json([
+            'year'      => $forecastYear,
+            'employees' => $forecastRecords
+        ]);
+    }
     public function destroy(string $id)
     {
         // OPTIMIZED: check auth first before any DB query

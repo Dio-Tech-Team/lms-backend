@@ -28,6 +28,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     //Employee Routes
     Route::get('employees/stats', [EmployeeController::class, 'stats']);
+    // Route::get('employees/stepIncrementForcast', [EmployeeController::class, 'stepIncrementForcast']);
+    Route::get('employees/step-increment-forecast', [EmployeeController::class, 'stepIncrementForecast']);
     Route::apiResource('employees', EmployeeController::class);
 
     //Department Routes

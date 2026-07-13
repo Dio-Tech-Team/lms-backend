@@ -33,6 +33,11 @@ class Employee extends Model
         'date_hired',
         'is_active',
     ];
+    protected $casts = [
+        'date_hired' => 'date',
+        'birthdate'  => 'date',
+        'is_active'  => 'boolean',
+    ];
 
     public function user()
     {
