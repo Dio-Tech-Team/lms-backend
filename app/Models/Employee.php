@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Employee extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'user_id',
         'department_id',
@@ -34,8 +36,8 @@ class Employee extends Model
         'is_active',
     ];
     protected $casts = [
-        'date_hired' => 'date',
-        'birthdate'  => 'date',
+        'date_hired' => 'date:Y-m-d',
+        'birthdate'  => 'date:Y-m-d',
         'is_active'  => 'boolean',
     ];
 

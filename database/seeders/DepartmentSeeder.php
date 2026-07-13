@@ -26,7 +26,7 @@ class DepartmentSeeder extends Seeder
             ['code' => 'MHRMO',   'name' => 'Municipal Human Resource Management Office'],
             ['code' => 'MPDO',    'name' => 'Municipal Planning and Development Office'],
             ['code' => 'MSWDO',   'name' => 'Municipal Social Welfare and Development Office'],
-            ['code' => 'MTC',     'name' => 'Municipal Trial Court'],
+            ['code' => 'MTCO',     'name' => 'Municipal Trial Court Office'],
             ['code' => 'MTO',     'name' => 'Municipal Treasurer Office'],
             ['code' => 'MO',      'name' => "Mayor's Office"],
             ['code' => 'POSU',    'name' => 'Public Order and Safety Unit'],
