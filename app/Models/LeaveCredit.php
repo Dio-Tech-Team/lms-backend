@@ -19,9 +19,9 @@ class LeaveCredit extends Model
     ];
 
     protected $casts = [
-        'total_credits' => 'decimal:2',
-        'used_credits' => 'decimal:2',
-        'remaining_balance' => 'decimal:2',
+        'total_credits' => 'decimal:3',
+        'used_credits' => 'decimal:3',
+        'remaining_balance' => 'decimal:3',
         'last_updated' => 'datetime',
     ];
 

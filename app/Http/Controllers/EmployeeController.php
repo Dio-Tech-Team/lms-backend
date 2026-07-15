@@ -363,33 +363,83 @@ class EmployeeController extends Controller
         ];
     }
 
+    // private function calculateLoyaltyPay($employee)
+    // {
+    //     $startDate = \Carbon\Carbon::parse($employee->date_hired);
+    //     $yearsServed = $startDate->diffInYears(now());
+
+    //     if ($yearsServed < 10) {
+    //         $yearsUntilFirst = 10 - $yearsServed;
+    //         return [
+    //             'eligible' => false,
+    //             'years_served' => $yearsServed,
+    //             'years_until_next' => $yearsUntilFirst,
+    //             'next_milestone' => 10,
+    //         ];
+    //     }
+
+    //     $yearsAfterFirst = $yearsServed - 10;
+    //     $milestonesPassed = floor($yearsAfterFirst / 5) + 1;
+    //     $nextMilestone = 10 + ($milestonesPassed * 5);
+    //     $yearsUntilNext = $nextMilestone - $yearsServed;
+
+    //     return [
+    //         'eligible' => true,
+    //         'years_served' => $yearsServed,
+    //         'milestones_received' => (int) $milestonesPassed,
+    //         'years_until_next' => $yearsUntilNext,
+    //         'next_milestone' => $nextMilestone,
+    //     ];
+    // }
     private function calculateLoyaltyPay($employee)
     {
-        $startDate = \Carbon\Carbon::parse($employee->date_hired);
-        $yearsServed = $startDate->diffInYears(now());
+        if ($employee->employment_status !== 'permanent') {
+            return [
+                'eligible'          => false,
+                'message'           => 'Not applicable - employee is not currently permanent',
+                'years_served'      => 0,
+                'years_until_next'  => null,
+                'next_milestone'    => 10,
+            ];
+        }
+
+        $employmentHistory = $employee->relationLoaded('employment_history')
+            ? $employee->employment_history
+            : $employee->employment_history()->orderBy('effective_date', 'desc')->get();
+
+        $earliestPermanent = $employmentHistory
+            ->filter(fn($history) => $history->new_employment_status === 'permanent')
+            ->sortBy('effective_date')
+            ->first();
+
+        $startDate = $earliestPermanent
+            ? \Carbon\Carbon::parse($earliestPermanent->effective_date)
+            : \Carbon\Carbon::parse($employee->date_hired);
+
+        $yearsServed = max(0, $startDate->diffInYears(now()));
 
         if ($yearsServed < 10) {
             $yearsUntilFirst = 10 - $yearsServed;
             return [
-                'eligible' => false,
-                'years_served' => $yearsServed,
-                'years_until_next' => $yearsUntilFirst,
-                'next_milestone' => 10,
+                'eligible'          => false,
+                'since'             => $startDate->format('Y-m-d'),
+                'years_served'      => $yearsServed,
+                'years_until_next'  => $yearsUntilFirst,
+                'next_milestone'    => 10,
             ];
         }
-
-        // After 10 years, every 5 years
         $yearsAfterFirst = $yearsServed - 10;
         $milestonesPassed = floor($yearsAfterFirst / 5) + 1; // +1 for the initial 10-year milestone
         $nextMilestone = 10 + ($milestonesPassed * 5);
         $yearsUntilNext = $nextMilestone - $yearsServed;
 
         return [
-            'eligible' => true,
-            'years_served' => $yearsServed,
-            'milestones_received' => (int) $milestonesPassed,
-            'years_until_next' => $yearsUntilNext,
-            'next_milestone' => $nextMilestone,
+            'eligible'              => true,
+            'since'                 => $startDate->format('Y-m-d'),
+            'years_served'          => $yearsServed,
+            'milestones_received'   => (int) $milestonesPassed,
+            'years_until_next'      => $yearsUntilNext,
+            'next_milestone'        => $nextMilestone,
         ];
     }
 

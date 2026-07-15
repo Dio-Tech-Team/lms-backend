@@ -31,6 +31,7 @@ class LeaveApplicationController extends Controller
             'leave_applications.reviewed_by',
             'employees.first_name',
             'employees.surname',
+            'departments.name as department_name',
             'leave_configurations.name as leave_type_name',
             'leave_configurations.code as leave_type_code',
             'users.username as reviewed_by_username',
@@ -60,25 +61,92 @@ class LeaveApplicationController extends Controller
         return response()->json($applications);
     }
 
+    // public function store(Request $request)
+    // {
+    //     $validated = $request->validate([
+    //         'leave_configuration_id' => 'required|exists:leave_configurations,id',
+    //         'start_date'      => 'required|date',
+    //         'end_date'        => 'required|date|after_or_equal:start_date',
+    //         'days_applied'    => 'required|numeric|min:0.5',
+    //         'reason'          => 'nullable|string',
+    //     ]);
+
+    //     $employee = $request->user()->employee;
+
+    //     if (!$employee) {
+    //         return response()->json([
+    //             'message' => 'The authenticated user is not linked to an employee profile.'
+    //         ], 402);
+    //     }
+
+    //     // Fetch leave config once (store intermediate result)
+    //     $config = LeaveConfiguration::select(['id', 'code', 'name'])
+    //         ->findOrFail($validated['leave_configuration_id']);
+
+    //     if ($config->code === 'WL' && $validated['days_applied'] > 3) {
+    //         return response()->json([
+    //             'message' => 'Wellness leave cannot exceed 3 consecutive days per application.'
+    //         ], 422);
+    //     }
+
+    //     // FIXED: correct column names for credit lookup
+    //     $credit = LeaveCredit::where('employee_id', $employee->id)
+    //         ->where('leave_configuration_id', $validated['leave_configuration_id'])
+    //         ->where('year', now()->year)
+    //         ->first();
+
+    //     // Warn if insufficient balance (but still allow submission)
+    //     $hasInsufficientBalance = !$credit || $credit->remaining_balance < $validated['days_applied'];
+
+    //     $application = LeaveApplication::create([
+    //         'employee_id'     => $employee->id,
+    //         'leave_configuration_id' => $validated['leave_configuration_id'],
+    //         'start_date'      => $validated['start_date'],
+    //         'end_date'        => $validated['end_date'],
+    //         'days_applied'    => $validated['days_applied'],
+    //         'reason'          => $validated['reason'],
+    //         'status'          => 'pending',
+    //         'applied_at'      => now(),
+    //     ]);
+
+    //     return response()->json([
+    //         'message'              => 'Leave application submitted successfully',
+    //         'data'                 => $application,
+    //         'insufficient_balance' => $hasInsufficientBalance,
+    //         'remaining_balance'    => $credit->remaining_balance ?? 0,
+    //     ], 201);
+    // }
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'employee_id'            => 'nullable|exists:employees,id', // Added for Admin/Paper entry
             'leave_configuration_id' => 'required|exists:leave_configurations,id',
-            'start_date'      => 'required|date',
-            'end_date'        => 'required|date|after_or_equal:start_date',
-            'days_applied'    => 'required|numeric|min:0.5',
-            'reason'          => 'nullable|string',
+            'start_date'             => 'required|date',
+            'end_date'               => 'required|date|after_or_equal:start_date',
+            'days_applied'           => 'required|numeric|min:0.5',
+            'reason'                 => 'nullable|string',
+            'is_paper_submission'    => 'nullable|boolean', // Added to trace manual entries
         ]);
 
-        $employee = $request->user()->employee;
+        if (($request->filled('employee_id') || $request->boolean('is_paper_submission'))
+            && (!$request->user() || $request->user()->role !== 'hr_admin')
+        ) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ($request->has('employee_id') && $request->filled('employee_id')) {
+            $employee = Employee::find($validated['employee_id']);
+        } else {
+            $employee = $request->user()->employee;
+        }
 
         if (!$employee) {
             return response()->json([
-                'message' => 'The authenticated user is not linked to an employee profile.'
-            ], 402);
+                'message' => 'Target employee profile could not be determined.'
+            ], 422);
         }
 
-        // Fetch leave config once (store intermediate result)
+        // Fetch leave config once
         $config = LeaveConfiguration::select(['id', 'code', 'name'])
             ->findOrFail($validated['leave_configuration_id']);
 
@@ -88,28 +156,66 @@ class LeaveApplicationController extends Controller
             ], 422);
         }
 
-        // FIXED: correct column names for credit lookup
+        // Check current balance
         $credit = LeaveCredit::where('employee_id', $employee->id)
             ->where('leave_configuration_id', $validated['leave_configuration_id'])
             ->where('year', now()->year)
             ->first();
 
-        // Warn if insufficient balance (but still allow submission)
         $hasInsufficientBalance = !$credit || $credit->remaining_balance < $validated['days_applied'];
 
-        $application = LeaveApplication::create([
-            'employee_id'     => $employee->id,
-            'leave_configuration_id' => $validated['leave_configuration_id'],
-            'start_date'      => $validated['start_date'],
-            'end_date'        => $validated['end_date'],
-            'days_applied'    => $validated['days_applied'],
-            'reason'          => $validated['reason'],
-            'status'          => 'pending',
-            'applied_at'      => now(),
-        ]);
+        // 2. CHOOSE WORKFLOW ROUTE
+        // If marked as an already signed paper submission, completely process and deduct instantly
+        if ($request->get('is_paper_submission') == true) {
+            $application = DB::transaction(function () use ($employee, $validated, $credit, $request) {
+                $app = LeaveApplication::create([
+                    'employee_id'            => $employee->id,
+                    'leave_configuration_id' => $validated['leave_configuration_id'],
+                    'start_date'             => $validated['start_date'],
+                    'end_date'               => $validated['end_date'],
+                    'days_applied'           => $validated['days_applied'],
+                    'reason'                 => ($validated['reason'] ?? 'No reason provided') . ' (Filed via Paper Form)',
+                    'status'                 => 'approved',
+                    'applied_at'             => now(),
+                    'reviewed_at'            => now(),
+                    'reviewed_by'            => $request->user()->id,
+                ]);
+
+                LeaveRecord::create([
+                    'employee_id'            => $employee->id,
+                    'leave_configuration_id' => $validated['leave_configuration_id'],
+                    'recorded_by'            => $request->user()->id,
+                    'start_date'             => $validated['start_date'],
+                    'end_date'               => $validated['end_date'],
+                    'days_taken'             => $validated['days_applied'],
+                    'remarks'                => 'Paper Submission Backup ID: ' . $app->id,
+                ]);
+
+                if ($credit) {
+                    $credit->used_credits      += $validated['days_applied'];
+                    $credit->remaining_balance -= $validated['days_applied'];
+                    $credit->last_updated       = now();
+                    $credit->save();
+                }
+
+                return $app;
+            });
+        } else {
+            // Standard Pending Route (Mobile App Route)
+            $application = LeaveApplication::create([
+                'employee_id'            => $employee->id,
+                'leave_configuration_id' => $validated['leave_configuration_id'],
+                'start_date'             => $validated['start_date'],
+                'end_date'               => $validated['end_date'],
+                'days_applied'           => $validated['days_applied'],
+                'reason'                 => $validated['reason'],
+                'status'                 => 'pending',
+                'applied_at'             => now(),
+            ]);
+        }
 
         return response()->json([
-            'message'              => 'Leave application submitted successfully',
+            'message'              => 'Leave application processed successfully',
             'data'                 => $application,
             'insufficient_balance' => $hasInsufficientBalance,
             'remaining_balance'    => $credit->remaining_balance ?? 0,
