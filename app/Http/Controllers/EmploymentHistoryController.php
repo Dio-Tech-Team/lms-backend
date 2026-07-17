@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\EmploymentHistory;
 use App\Models\Employee;
 use Illuminate\Support\Facades\DB;
-
+use App\Http\Controllers\LeaveCreditController;
 class EmploymentHistoryController extends Controller
 {
     /**
@@ -50,7 +50,8 @@ class EmploymentHistoryController extends Controller
                 'position'          => $request->new_position,
                 'employment_status' => $request->new_employment_status,
             ]);
-
+            $leaveController = new LeaveCreditController();
+            $leaveController->initializeSingleEmployeeCredits($employeeId);
             // Create the history record
             return EmploymentHistory::create([
                 'employee_id'                => $employeeId,

@@ -31,7 +31,7 @@ class LeaveConfigurationController extends Controller
         $validated = $request->validate([
             'name'           => 'required|string|max:255',
             'code'           => 'required|string|max:50|unique:leave_configurations,code',
-            'application_to' => 'required|in:permanent,casual,elected,all',
+            'application_to' => 'required|in:permanent,casual,elected,job_order,all',
             'can_carry_over' => 'boolean',
             'can_monetize'   => 'boolean',
             'fixed_days'     => 'nullable|numeric',
@@ -83,7 +83,7 @@ class LeaveConfigurationController extends Controller
         $validated = $request->validate([
             'name'           => 'sometimes|required|string|max:255',
             'code'           => 'sometimes|required|string|max:50|unique:leave_configurations,code,' . $id,
-            'application_to' => 'sometimes|required|in:permanent,casual,elected,all',
+            'application_to' => 'sometimes|required|in:permanent,casual,elected,job_order,all',
             'can_carry_over' => 'sometimes|boolean',
             'can_monetize'   => 'sometimes|boolean',
             'fixed_days'     => 'nullable|numeric',

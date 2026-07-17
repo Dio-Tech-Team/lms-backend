@@ -1,94 +1,78 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\EmployeeController;
-use App\Http\Controllers\DepartmentController;
-use App\Http\Controllers\LeaveConfigurationController;
-use App\Http\Controllers\LeaveCreditController;
-use App\Http\Controllers\LeaveRecordController;
-use App\Http\Controllers\LeaveApplicationController;
-use App\Http\Controllers\EmploymentHistoryController;
-use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\{
+    AuthController,
+    EmployeeController,
+    DepartmentController,
+    LeaveConfigurationController,
+    LeaveCreditController,
+    LeaveRecordController,
+    LeaveApplicationController,
+    EmploymentHistoryController,
+    AttendanceController
+};
 
-
-
+// 1. PUBLIC ROUTES
 Route::post('/login', [AuthController::class, 'login']);
-// ->middleware('throttle:login'); // Limit to 5 attempts per minute
-// Route::post('/test-upload', function () {
-//     return [
-//         'SERVER_CONTENT_TYPE' => $_SERVER['CONTENT_TYPE'] ?? null,
-//         'FILES_GLOBAL' => $_FILES,
-//     ];
-// });
 
+// 2. AUTHENTICATED ROUTES
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
-    //Employee Routes
-    Route::get('employees/stats', [EmployeeController::class, 'stats']);
-    // Route::get('employees/stepIncrementForcast', [EmployeeController::class, 'stepIncrementForcast']);
-    Route::get('employees/step-increment-forecast', [EmployeeController::class, 'stepIncrementForecast']);
-    Route::apiResource('employees', EmployeeController::class);
 
-    //Department Routes
+    // --- Employee & Department Management ---
+    Route::get('employees/stats', [EmployeeController::class, 'stats']);
+    Route::get('employees/step-increment-forecast', [EmployeeController::class, 'stepIncrementForecast']);
+    Route::get('employees/{id}/leave-card', [EmployeeController::class, 'leaveCard']);
+    Route::apiResource('employees', EmployeeController::class);
     Route::apiResource('departments', DepartmentController::class);
 
-    // Promotion History Routes
+    //mobile
+    Route::get('/dashboard/balances', [LeaveCreditController::class, 'getLeaveCreditBalances']);
 
-    Route::get('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'index']);
-    Route::post('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'store']);
-    Route::delete('employees/{employeeId}/promotions/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
+    // --- Promotion History ---
+    Route::prefix('employees/{employeeId}/promotions')->group(function () {
+        Route::get('/', [EmploymentHistoryController::class, 'index']);
+        Route::post('/', [EmploymentHistoryController::class, 'store']);
+        Route::delete('/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
+    });
 
-
-    //Leave Configuration Routes
-    // Route::get('leave-configurations', [LeaveConfigurationController::class, 'index']);
-    // Route::post('leave-configurations', [LeaveConfigurationController::class, 'store']);
-    // Route::get('leave-configurations/{id}', [LeaveConfigurationController::class, 'show']);
-    // Route::put('leave-configurations/{id}', [LeaveConfigurationController::class, 'update']);
-    // Route::delete('leave-configurations/{id}', [LeaveConfigurationController::class, 'destroy']); 
+    // --- Leave Configurations ---
     Route::apiResource('leave-configurations', LeaveConfigurationController::class);
 
-    // Leave Credit Routes
-    Route::get('employees/{employeeId}/leave-credits', [LeaveCreditController::class, 'index']);
-    Route::post('employees/{employeeId}/leave-credits/initialize', [LeaveCreditController::class, 'initializeCredits']);
-    Route::put('employees/{employeeId}/leave-credits/{creditId}', [LeaveCreditController::class, 'update']);
-    // Add this line inside the auth:sanctum group in routes/api.php,
-    // anywhere near your other employee routes:
+    // --- Leave Credits ---
+    Route::prefix('employees/{employeeId}/leave-credits')->group(function () {
+        Route::get('/', [LeaveCreditController::class, 'index']);
+        Route::post('/initialize', [LeaveCreditController::class, 'initializeCredits']);
+        Route::put('/{creditId}', [LeaveCreditController::class, 'update']);
+    });
 
-    Route::get('employees/{id}/leave-card', [EmployeeController::class, 'leaveCard']);
+    // --- Leave Applications (General) ---
+    Route::prefix('leave-applications')->group(function () {
+        Route::get('/', [LeaveApplicationController::class, 'index']);
+        Route::post('/', [LeaveApplicationController::class, 'store']);
+        Route::get('/{id}', [LeaveApplicationController::class, 'show']);
+        Route::get('/{id}/pdf', [LeaveApplicationController::class, 'generatePdf']);
+    });
 
-    // No ordering conflict here (unlike the /employees/stats route) since this
-    // path has an extra segment (/leave-card) that apiResource's
-    // employees/{employee} pattern doesn't match.
-
-    // Leave Record Routes
-    // Leave Record Routes - HR can only view, update, delete
-    Route::get('leave-records/summary', [LeaveRecordController::class, 'summary']);
-
-
-    Route::get('leave-records', [LeaveRecordController::class, 'index']);
-    Route::get('leave-records/{id}', [LeaveRecordController::class, 'show']);
-    Route::put('leave-records/{id}', [LeaveRecordController::class, 'update']);
-    Route::delete('leave-records/{id}', [LeaveRecordController::class, 'destroy']);
-
-    // Leave Application Routes
-    Route::get('leave-applications', [LeaveApplicationController::class, 'index']);
-    Route::post('leave-applications', [LeaveApplicationController::class, 'store']);
-    Route::get('leave-applications/{id}', [LeaveApplicationController::class, 'show']);
-    Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
-    Route::post('leave-applications/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
-
-    //Leave form
-    Route::get('leave-applications/{id}/pdf', [LeaveApplicationController::class, 'generatePdf']);
-
-    Route::get('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'index']);
-    Route::post('employees/{employeeId}/promotions', [EmploymentHistoryController::class, 'store']);
-    Route::delete('employees/{employeeId}/promotions/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
-
-    //attendance
-
-    Route::post('attendance/upload', [AttendanceController::class, 'upload']);
+    // --- Attendance ---
     Route::get('attendance', [AttendanceController::class, 'index']);
+
+    // 3. HR ADMIN ONLY ROUTES (Using your new Middleware)
+    Route::middleware('role:hr_admin')->group(function () {
+        // Leave Application Admin Actions
+        Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
+        Route::post('leave-applications/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
+
+        // Leave Records (HR Management)
+        Route::get('leave-records/summary', [LeaveRecordController::class, 'summary']);
+        Route::apiResource('leave-records', LeaveRecordController::class);
+
+        // Credit Admin
+        Route::post('employees/leave-credits/initialize-all', [LeaveCreditController::class, 'initializeAllCredits']);
+
+        // Attendance Admin
+        Route::post('attendance/upload', [AttendanceController::class, 'upload']);
+    });
 });

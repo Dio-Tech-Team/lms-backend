@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use App\Models\LeaveConfiguration;
+use App\Http\Controllers\LeaveCreditController;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 
@@ -177,6 +179,27 @@ class EmployeeController extends Controller
                 'effective_date'               => $employee->date_hired,
                 'remarks'                       => 'Initial employment record',
             ]);
+            // // 🔥 AUTOMATIC INITIALIZATION HAPPENS HERE
+            // $creditController = new LeaveCreditController();
+            // $targetYear = Carbon::parse($employee->date_hired)->year;
+            // $creditController->initializeSingleEmployeeCredits($employee->id, $targetYear);
+            // // ----------------------------------------------------
+            try {
+                $creditController = new LeaveCreditController();
+                $hireYear = Carbon::parse($employee->date_hired)->year;
+                $currentYear = now()->year;
+
+                // 1. Initialize for the year they were hired
+                $creditController->initializeSingleEmployeeCredits($employee->id, $hireYear);
+
+                // 2. If hired in a past year, also initialize their credits for the current year
+                if ($hireYear !== $currentYear) {
+                    $creditController->initializeSingleEmployeeCredits($employee->id, $currentYear);
+                }
+            } catch (\Exception $e) {
+                // Log issues but don't fail the entire transaction if leave module fails
+                Log::error("Leave credit initialization failed during registration: " . $e->getMessage());
+            }
 
             return $employee;
         });

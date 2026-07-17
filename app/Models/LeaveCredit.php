@@ -24,7 +24,7 @@ class LeaveCredit extends Model
         'remaining_balance' => 'decimal:3',
         'last_updated' => 'datetime',
     ];
-
+    public $timestamps = true;
     public function employee()
     {
         return $this->belongsTo(Employee::class);

@@ -7,6 +7,7 @@ use App\Models\LeaveCredit;
 use App\Models\Employee;
 use App\Models\LeaveConfiguration;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class LeaveCreditController extends Controller
 {
@@ -33,45 +34,76 @@ class LeaveCreditController extends Controller
             ->get();
 
         return response()->json([
-            'employee' => $employee->first_name . ' ' . $employee->surname, // Fixed!
+            'employee' => $employee->first_name . ' ' . $employee->surname,
             'year'     => now()->year,
             'credits'  => $credits,
         ]);
     }
 
-    public function initializeCredits($employeeId)
+    public function initializeSingleEmployeeCredits($employeeId, $targetYear = null)
     {
-        $employee = Employee::select(['id', 'employment_status'])
-            ->findOrFail($employeeId);
+        $targetYear = $targetYear ?? now()->year;
+        $previousYear = $targetYear - 1;
 
-        // Store intermediate result - fetch configs once
-        $configurations = LeaveConfiguration::select(['id', 'application_to'])
-            ->where(function ($query) use ($employee) {
-                $query->where('application_to', 'all')
-                    ->orWhere('application_to', $employee->employment_status);
-            })
-            ->get();
+        $employee = Employee::findOrFail($employeeId);
+        $configs = LeaveConfiguration::all();
+        $now = now()->toDateTimeString(); // FIXED: Safe string for raw batch inserts
 
-        // OPTIMIZED: batch insert instead of N+1 loop
-        $now     = now();
-        $year    = $now->year;
-        $inserts = [];
+        $creditsToInsert = [];
 
-        foreach ($configurations as $config) {
-            // Check if already exists to avoid duplicates
-            $exists = LeaveCredit::where('employee_id', $employeeId)
-                ->where('leave_configuration_id', $config->id)
-                ->where('year', $year)
-                ->exists();
+        // Filter configurations based on employee status
+        // $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
+        //     return $config->application_to === 'all' || $config->application_to === $employee->employment_status;
+        // });
+        // Filter configurations based on employee status and statutory rules
+        $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
 
-            if (!$exists) {
-                $inserts[] = [
+            // 1. STATUTORY GATEKEEPER: These apply to EVERYONE (including JOs)
+            if (in_array($config->code, ['VAWC', 'SLB', 'CAL'])) {
+                return true;
+            }
+
+            // 2. JO RESTRICTION: If the status is 'job_order', block everything else
+            if ($employee->employment_status === 'job_order') {
+                return false;
+            }
+
+            // 3. STANDARD LOGIC: Only match if it's 'all' or specifically for their status
+            return $config->application_to === 'all' || $config->application_to === $employee->employment_status;
+        });
+
+        // OPTIMIZED: Get existing credits for this single employee to prevent loop queries
+        $existingCreditIds = LeaveCredit::where('employee_id', $employeeId)
+            ->where('year', $targetYear)
+            ->pluck('leave_configuration_id')
+            ->toArray();
+
+        foreach ($eligibleConfigs as $config) {
+            // Check in-memory array instead of hitting DB inside the loop
+            if (!in_array($config->id, $existingCreditIds)) {
+                $startingCredits = 0;
+
+                // Fixed Leaves (WL, FL, SPL)
+                if ($config->credit_type === 'fixed') {
+                    $startingCredits = $config->fixed_days ?? 0;
+                }
+                // Monthly Accumulating Leaves (VL, SL) -> Carry over check
+                else if ($config->can_carry_over) {
+                    $previousRecord = LeaveCredit::where('employee_id', $employeeId)
+                        ->where('leave_configuration_id', $config->id)
+                        ->where('year', $previousYear)
+                        ->first();
+
+                    $startingCredits = $previousRecord ? $previousRecord->remaining_balance : 0;
+                }
+
+                $creditsToInsert[] = [
                     'employee_id'            => $employeeId,
                     'leave_configuration_id' => $config->id,
-                    'year'                   => $year,
-                    'total_credits'          => 0,
+                    'year'                   => $targetYear,
+                    'total_credits'          => $startingCredits,
                     'used_credits'           => 0,
-                    'remaining_balance'      => 0,
+                    'remaining_balance'      => $startingCredits,
                     'last_updated'           => $now,
                     'created_at'             => $now,
                     'updated_at'             => $now,
@@ -79,12 +111,103 @@ class LeaveCreditController extends Controller
             }
         }
 
-        if (!empty($inserts)) {
-            LeaveCredit::insert($inserts); // single batch insert!
+        if (!empty($creditsToInsert)) {
+            LeaveCredit::insert($creditsToInsert);
+        }
+
+        return true;
+    }
+
+    public function initializeAllCredits(Request $request)
+    {
+        $targetYear = $request->input('year', now()->year);
+        $previousYear = $targetYear - 1;
+
+        $employees = Employee::where('is_active', true)->get();
+        $configs = LeaveConfiguration::all();
+        $now = now()->toDateTimeString(); // FIXED: Safe string for raw batch inserts
+
+        // OPTIMIZED: Chunk fetch existing credits for the target year to check duplicates in-memory
+        $existingCreditsMap = LeaveCredit::where('year', $targetYear)
+            ->select('employee_id', 'leave_configuration_id')
+            ->get()
+            ->groupBy('employee_id')
+            ->map(function ($items) {
+                return $items->pluck('leave_configuration_id')->toArray();
+            })
+            ->toArray();
+
+        // OPTIMIZED: Chunk fetch previous year balances to avoid loop queries during carry over checks
+        $previousBalancesMap = LeaveCredit::where('year', $previousYear)
+            ->select('employee_id', 'leave_configuration_id', 'remaining_balance')
+            ->get()
+            ->groupBy('employee_id')
+            ->map(function ($items) {
+                return $items->keyBy('leave_configuration_id')->map->remaining_balance->toArray();
+            })
+            ->toArray();
+
+        $creditsToInsert = [];
+
+        foreach ($employees as $employee) {
+            // $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
+            //     return $config->application_to === 'all' || $config->application_to === $employee->employment_status;
+            // });
+            $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
+
+                // 1. STATUTORY GATEKEEPER
+                if (in_array($config->code, ['VAWC', 'SLB', 'CAL'])) {
+                    return true;
+                }
+
+                // 2. JO RESTRICTION
+                if ($employee->employment_status === 'job_order') {
+                    return false;
+                }
+
+                // 3. STANDARD LOGIC
+                return $config->application_to === 'all' || $config->application_to === $employee->employment_status;
+            });
+
+            // Get already initialized configuration IDs for this employee
+            $employeeExistingConfigs = $existingCreditsMap[$employee->id] ?? [];
+
+            foreach ($eligibleConfigs as $config) {
+                // Check in-memory instead of executing: LeaveCredit::where(...)->exists()
+                if (!in_array($config->id, $employeeExistingConfigs)) {
+                    $startingCredits = 0;
+
+                    if ($config->credit_type === 'fixed') {
+                        $startingCredits = $config->fixed_days ?? 0;
+                    } else if ($config->can_carry_over) {
+                        // Retrieve carry over balance in-memory
+                        $startingCredits = $previousBalancesMap[$employee->id][$config->id] ?? 0;
+                    }
+
+                    $creditsToInsert[] = [
+                        'employee_id'            => $employee->id,
+                        'leave_configuration_id' => $config->id,
+                        'year'                   => $targetYear,
+                        'total_credits'          => $startingCredits,
+                        'used_credits'           => 0,
+                        'remaining_balance'      => $startingCredits,
+                        'last_updated'           => $now,
+                        'created_at'             => $now,
+                        'updated_at'             => $now,
+                    ];
+                }
+            }
+        }
+
+        // Batch insert the new records in chunks of 500 for optimal database batch writes
+        if (!empty($creditsToInsert)) {
+            foreach (array_chunk($creditsToInsert, 500) as $chunk) {
+                LeaveCredit::insert($chunk);
+            }
         }
 
         return response()->json([
-            'message' => 'Leave credits initialized successfully',
+            'message' => "Successfully initialized all leave credits for the year {$targetYear}!",
         ]);
     }
 
@@ -96,13 +219,17 @@ class LeaveCreditController extends Controller
             'remaining_balance' => 'sometimes|numeric|min:0',
         ]);
 
-        // OPTIMIZED: single update query with last_updated included
-        $validated['last_updated'] = now();
-
         $credit = LeaveCredit::where('employee_id', $employeeId)
             ->findOrFail($creditId);
 
-        $credit->update($validated); // single write instead of two!
+        // OPTIMIZED & FIXED: Auto-calculate remaining balance logically if total or used change
+        $total = $validated['total_credits'] ?? $credit->total_credits;
+        $used = $validated['used_credits'] ?? $credit->used_credits;
+
+        $validated['remaining_balance'] = max(0, $total - $used);
+        $validated['last_updated'] = now();
+
+        $credit->update($validated);
 
         return response()->json([
             'message' => 'Leave credit updated successfully',
@@ -115,5 +242,27 @@ class LeaveCreditController extends Controller
                 'last_updated'
             ]),
         ]);
+    }
+
+    //Mobile
+    public function getLeaveCreditBalances(Request $request)
+    {
+        $employee = $request->user()->employee;
+
+        if (!$employee) {
+            return response()->json(['message' => 'Employee profile not found'], 404);
+        }
+
+        $balances = LeaveCredit::join('leave_configurations', 'leave_credits.leave_configuration_id', '=', 'leave_configurations.id')
+            ->where('leave_credits.employee_id', $employee->id)
+            ->where('leave_credits.year', now()->year)
+            ->select(
+                'leave_configurations.name',
+                'leave_configurations.code',
+                'leave_credits.remaining_balance'
+            )
+            ->get();
+
+        return response()->json($balances);
     }
 }
