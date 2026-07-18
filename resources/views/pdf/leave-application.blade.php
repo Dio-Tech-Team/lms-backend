@@ -129,55 +129,47 @@
                 <strong>6.A TYPE OF LEAVE TO BE AVAILED OF</strong><br><br>
 
                 <span class="checkbox {{ $code === 'VL' ? 'checked' : '' }}">{{ $code === 'VL' ? 'X' : '' }}</span>
-                Vacation Leave <span class="small-text">(Sec. 51, Rule XVI, Omnibus Rules Implementing E.O. No.
-                    292)</span><br><br>
+                Vacation Leave <span class="small-text">(Sec. 51, Rule XVI, Omnibus Rules)</span><br><br>
 
-                <span class="checkbox">{{ '' }}</span>
-                Mandatory/Forced Leave <span class="small-text">(Sec. 25, Rule XVI, Omnibus Rules Implementing E.O. No.
-                    292)</span><br><br>
+                <span class="checkbox {{ $code === 'FL' ? 'checked' : '' }}">{{ $code === 'FL' ? 'X' : '' }}</span>
+                Mandatory/Forced Leave <span class="small-text">(Sec. 25, Rule XVI, Omnibus Rules)</span><br><br>
 
                 <span class="checkbox {{ $code === 'SL' ? 'checked' : '' }}">{{ $code === 'SL' ? 'X' : '' }}</span>
-                Sick Leave <span class="small-text">(Sec. 43, Rule XVI, Omnibus Rules Implementing E.O. No.
-                    292)</span><br><br>
+                Sick Leave <span class="small-text">(Sec. 43, Rule XVI, Omnibus Rules)</span><br><br>
 
                 <span class="checkbox {{ $code === 'ML' ? 'checked' : '' }}">{{ $code === 'ML' ? 'X' : '' }}</span>
-                Maternity Leave <span class="small-text">(R.A. No. 11210 / IRR issued by CSC, DOLE and
-                    SSS)</span><br><br>
+                Maternity Leave <span class="small-text">(R.A. No. 11210)</span><br><br>
 
                 <span class="checkbox {{ $code === 'PL' ? 'checked' : '' }}">{{ $code === 'PL' ? 'X' : '' }}</span>
-                Paternity Leave <span class="small-text">(R.A. No. 8187 / CSC MC No. 71, s. 1998, as
-                    amended)</span><br><br>
+                Paternity Leave <span class="small-text">(R.A. No. 8187)</span><br><br>
 
-                <span class="checkbox">{{ '' }}</span>
-                Special Privilege Leave <span class="small-text">(Sec. 21, Rule XVI, Omnibus Rules Implementing E.O. No.
-                    292)</span><br><br>
+                <span class="checkbox {{ $code === 'SPL' ? 'checked' : '' }}">{{ $code === 'SPL' ? 'X' : '' }}</span>
+                Special Privilege Leave <span class="small-text">(Sec. 21, Rule XVI, Omnibus Rules)</span><br><br>
 
-                <span class="checkbox">{{ '' }}</span>
-                Solo Parent Leave <span class="small-text">(RA No. 8972 / CSC MC No. 8, s. 2004)</span><br><br>
+                <span class="checkbox {{ $code === 'SOLO' ? 'checked' : '' }}">{{ $code === 'SOLO' ? 'X' : '' }}</span>
+                Solo Parent Leave <span class="small-text">(RA No. 8972)</span><br><br>
 
-                <span class="checkbox">{{ '' }}</span>
-                Study Leave <span class="small-text">(Sec. 68, Rule XVI, Omnibus Rules Implementing E.O. No.
-                    292)</span><br><br>
+                <span class="checkbox {{ $code === 'STL' ? 'checked' : '' }}">{{ $code === 'STL' ? 'X' : '' }}</span>
+                Study Leave <span class="small-text">(Sec. 68, Rule XVI, Omnibus Rules)</span><br><br>
 
-                <span class="checkbox">{{ '' }}</span>
-                10-Day VAWC Leave <span class="small-text">(RA No. 9262 / CSC MC No. 15, s. 2005)</span><br><br>
+                <span class="checkbox {{ $code === 'VAWC' ? 'checked' : '' }}">{{ $code === 'VAWC' ? 'X' : '' }}</span>
+                10-Day VAWC Leave <span class="small-text">(RA No. 9262)</span><br><br>
 
-                <span class="checkbox">{{ '' }}</span>
-                Rehabilitation Privilege <span class="small-text">(Sec. 55, Rule XVI, Omnibus Rules Implementing E.O.
-                    No. 292)</span><br><br>
+                <span
+                    class="checkbox {{ $code === 'REHAB' ? 'checked' : '' }}">{{ $code === 'REHAB' ? 'X' : '' }}</span>
+                Rehabilitation Privilege <span class="small-text">(Sec. 55, Rule XVI, Omnibus Rules)</span><br><br>
 
                 <span class="checkbox {{ $code === 'SLB' ? 'checked' : '' }}">{{ $code === 'SLB' ? 'X' : '' }}</span>
-                Special Leave Benefits for Women <span class="small-text">(RA No. 9710 / CSC MC No. 25, s.
-                    2010)</span><br><br>
+                Special Leave Benefits for Women <span class="small-text">(RA No. 9710)</span><br><br>
 
-                <span class="checkbox">{{ '' }}</span>
-                Special Emergency (Calamity) Leave <span class="small-text">(CSC MC No. 2, s. 2012, as
-                    amended)</span><br><br>
+                <span class="checkbox {{ $code === 'CAL' ? 'checked' : '' }}">{{ $code === 'CAL' ? 'X' : '' }}</span>
+                Special Emergency (Calamity) Leave <span class="small-text">(CSC MC No. 2, s. 2012)</span><br><br>
 
-                <span class="checkbox">{{ '' }}</span>
+                <span class="checkbox {{ $code === 'ADOP' ? 'checked' : '' }}">{{ $code === 'ADOP' ? 'X' : '' }}</span>
                 Adoption Leave <span class="small-text">(R.A. No. 8552)</span><br><br>
 
-                <strong>Others:</strong> _______________________
+                <strong>Others:</strong>
+                {{ !in_array($code, ['VL', 'FL', 'SL', 'ML', 'PL', 'SPL', 'SOLO', 'STL', 'VAWC', 'REHAB', 'SLB', 'CAL', 'ADOP']) ? $application->leaveConfiguration->name : '_______________________' }}
             </td>
             <td style="width:50%;">
                 <strong>6.B DETAILS OF LEAVE</strong><br><br>
@@ -249,7 +241,10 @@
                 </table>
                 <br>
                 <div class="center underline">&nbsp;</div>
-                <div class="center small-text">HR Officer</div>
+                <div class="center small-text">
+                    <strong>FE A. BARTOLOME</strong><br>
+                    HR Officer
+                </div>
             </td>
             <td style="width:50%;">
                 <strong>7.B RECOMMENDATION</strong><br><br>

@@ -60,182 +60,6 @@ class LeaveApplicationController extends Controller
 
         return response()->json($applications);
     }
-
-    // public function store(Request $request)
-    // {
-    //     $validated = $request->validate([
-    //         'leave_configuration_id' => 'required|exists:leave_configurations,id',
-    //         'start_date'      => 'required|date',
-    //         'end_date'        => 'required|date|after_or_equal:start_date',
-    //         'days_applied'    => 'required|numeric|min:0.5',
-    //         'reason'          => 'nullable|string',
-    //     ]);
-
-    //     $employee = $request->user()->employee;
-
-    //     if (!$employee) {
-    //         return response()->json([
-    //             'message' => 'The authenticated user is not linked to an employee profile.'
-    //         ], 402);
-    //     }
-
-    //     // Fetch leave config once (store intermediate result)
-    //     $config = LeaveConfiguration::select(['id', 'code', 'name'])
-    //         ->findOrFail($validated['leave_configuration_id']);
-
-    //     if ($config->code === 'WL' && $validated['days_applied'] > 3) {
-    //         return response()->json([
-    //             'message' => 'Wellness leave cannot exceed 3 consecutive days per application.'
-    //         ], 422);
-    //     }
-
-    //     // FIXED: correct column names for credit lookup
-    //     $credit = LeaveCredit::where('employee_id', $employee->id)
-    //         ->where('leave_configuration_id', $validated['leave_configuration_id'])
-    //         ->where('year', now()->year)
-    //         ->first();
-
-    //     // Warn if insufficient balance (but still allow submission)
-    //     $hasInsufficientBalance = !$credit || $credit->remaining_balance < $validated['days_applied'];
-
-    //     $application = LeaveApplication::create([
-    //         'employee_id'     => $employee->id,
-    //         'leave_configuration_id' => $validated['leave_configuration_id'],
-    //         'start_date'      => $validated['start_date'],
-    //         'end_date'        => $validated['end_date'],
-    //         'days_applied'    => $validated['days_applied'],
-    //         'reason'          => $validated['reason'],
-    //         'status'          => 'pending',
-    //         'applied_at'      => now(),
-    //     ]);
-
-    //     return response()->json([
-    //         'message'              => 'Leave application submitted successfully',
-    //         'data'                 => $application,
-    //         'insufficient_balance' => $hasInsufficientBalance,
-    //         'remaining_balance'    => $credit->remaining_balance ?? 0,
-    //     ], 201);
-    // // }
-    // public function store(Request $request)
-    // {
-    //     $validated = $request->validate([
-    //         'employee_id'            => 'nullable|exists:employees,id',
-    //         'leave_configuration_id' => 'required|exists:leave_configurations,id',
-    //         'start_date'             => 'required|date',
-    //         'end_date'               => 'required|date|after_or_equal:start_date',
-    //         'days_applied'           => 'required|numeric|min:0.5',
-    //         'reason'                 => 'nullable|string',
-    //         'is_paper_submission'    => 'nullable|boolean', 
-    //     ]);
-
-    //     if (($request->filled('employee_id') || $request->boolean('is_paper_submission'))
-    //         && (!$request->user() || $request->user()->role !== 'hr_admin')
-    //     ) {
-    //         return response()->json(['message' => 'Forbidden'], 403);
-    //     }
-
-    //     if ($request->has('employee_id') && $request->filled('employee_id')) {
-    //         $employee = Employee::find($validated['employee_id']);
-    //     } else {
-    //         $employee = $request->user()->employee;
-    //     }
-
-    //     if (!$employee) {
-    //         return response()->json([
-    //             'message' => 'Target employee profile could not be determined.'
-    //         ], 422);
-    //     }
-
-
-    //     $config = LeaveConfiguration::select(['id', 'code', 'name'])
-    //         ->findOrFail($validated['leave_configuration_id']);
-
-    //     $credit = LeaveCredit::where('employee_id', $employee->id)
-    //         ->where('leave_configuration_id', $config->id)
-    //         ->where('year', now()->year)
-    //         ->first();
-
-    //     if (in_array($config->code, ['WL', 'SPL'])) {
-    //         if (!$credit || $credit->remaining_balance < $validated['days_applied']) {
-    //             return response()->json([
-    //                 'message' => 'Insufficient balance for ' . $config->name . '. You cannot file this leave.'
-    //             ], 422); 
-    //         }
-    //     }
-
-    //     $eligibilityError = $this->validateLeaveEligibility($config, $employee);
-    //     if ($eligibilityError) {
-    //         return response()->json(['message' => $eligibilityError], 422);
-    //     }
-
-    //     if ($config->code === 'WL' && $validated['days_applied'] > 3) {
-    //         return response()->json([
-    //             'message' => 'Wellness leave cannot exceed 3 consecutive days per application.'
-    //         ], 422);
-    //     }
-
-    //     $credit = LeaveCredit::where('employee_id', $employee->id)
-    //         ->where('leave_configuration_id', $validated['leave_configuration_id'])
-    //         ->where('year', now()->year)
-    //         ->first();
-
-    //     $hasInsufficientBalance = !$credit || $credit->remaining_balance < $validated['days_applied'];
-
-    //     if ($request->get('is_paper_submission') == true) {
-    //         $application = DB::transaction(function () use ($employee, $validated, $credit, $request) {
-    //             $app = LeaveApplication::create([
-    //                 'employee_id'            => $employee->id,
-    //                 'leave_configuration_id' => $validated['leave_configuration_id'],
-    //                 'start_date'             => $validated['start_date'],
-    //                 'end_date'               => $validated['end_date'],
-    //                 'days_applied'           => $validated['days_applied'],
-    //                 'reason'                 => ($validated['reason'] ?? 'No reason provided') . ' (Filed via Paper Form)',
-    //                 'status'                 => 'approved',
-    //                 // 'applied_at'             => now(),
-    //                 'applied_at'             => $request->input('applied_at', now()),
-    //                 'reviewed_at'            => now(),
-    //                 'reviewed_by'            => $request->user()->id,
-    //             ]);
-
-    //             LeaveRecord::create([
-    //                 'employee_id'            => $employee->id,
-    //                 'leave_configuration_id' => $validated['leave_configuration_id'],
-    //                 'recorded_by'            => $request->user()->id,
-    //                 'start_date'             => $validated['start_date'],
-    //                 'end_date'               => $validated['end_date'],
-    //                 'days_taken'             => $validated['days_applied'],
-    //                 'remarks'                => 'Paper Submission Backup ID: ' . $app->id,
-    //             ]);
-
-    //             if ($credit) {
-    //                 $credit->used_credits      += $validated['days_applied'];
-    //                 $credit->remaining_balance -= $validated['days_applied'];
-    //                 $credit->last_updated       = now();
-    //                 $credit->save();
-    //             }
-
-    //             return $app;
-    //         });
-    //     } else {
-    //         $application = LeaveApplication::create([
-    //             'employee_id'            => $employee->id,
-    //             'leave_configuration_id' => $validated['leave_configuration_id'],
-    //             'start_date'             => $validated['start_date'],
-    //             'end_date'               => $validated['end_date'],
-    //             'days_applied'           => $validated['days_applied'],
-    //             'reason'                 => $validated['reason'],
-    //             'status'                 => 'pending',
-    //             'applied_at'             => now(),
-    //         ]);
-    //     }
-
-    //     return response()->json([
-    //         'message'              => 'Leave application processed successfully',
-    //         'data'                 => $application,
-    //         'insufficient_balance' => $hasInsufficientBalance,
-    //         'remaining_balance'    => $credit->remaining_balance ?? 0,
-    //     ], 201);
-    // }
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -247,6 +71,17 @@ class LeaveApplicationController extends Controller
             'reason'                 => 'nullable|string',
             'is_paper_submission'    => 'nullable|boolean',
         ]);
+
+        $user = $request->user();
+        $config = LeaveConfiguration::findOrFail($request->leave_configuration_id);
+
+        // THE SAFETY GATE
+        // If the user is a Job Order, block them unless the leave code is 'WL' (Wellness)
+        if ($user->status === 'job_order' && $config->code !== 'WL') {
+            return response()->json([
+                'message' => 'Unauthorized: Job Order personnel are only eligible for Wellness Leave.'
+            ], 403);
+        }
 
         if (($request->filled('employee_id') || $request->boolean('is_paper_submission'))
             && (!$request->user() || $request->user()->role !== 'hr_admin')
@@ -439,6 +274,7 @@ class LeaveApplicationController extends Controller
                 $query->where('code', $targetCode);
             })
             ->where('year', now()->year)
+            // ->lockForUpdate() prevent double approve if 2 or more admin approved
             ->first();
 
         // 1. STRICT VALIDATION: Block if Wellness or SPL balance is insufficient
@@ -580,6 +416,8 @@ class LeaveApplicationController extends Controller
             'code'        => $code,
             'vl_total'    => $vlCredit->total_credits ?? 0,
             'vl_balance'  => $vlCredit->remaining_balance ?? 0,
+
+
             'sl_total'    => $slCredit->total_credits ?? 0,
             'sl_balance'  => $slCredit->remaining_balance ?? 0,
         ];

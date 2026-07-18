@@ -15,7 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('code')->unique();
-            $table->enum('application_to', ['permanent', 'casual', 'elected', 'job_order', 'all'])->default('all');
+            // $table->enum('application_to', ['permanent', 'casual', 'elected', 'job_order', 'all'])->default('all');
+            $table->text('application_to')->default('all');
             $table->boolean('can_carry_over')->default(false);
             $table->boolean('can_monetize')->default(false);
             $table->decimal('fixed_days', 8, 2)->nullable();

@@ -19,6 +19,7 @@ class LeaveConfiguration extends Model
     ];
 
     protected $casts = [
+        'application_to' => 'array',
         'can_carry_over' => 'boolean',
         'can_monetize' => 'boolean',
         'fixed_days' => 'decimal:2',

@@ -48,6 +48,20 @@ class EmployeeController extends Controller
         if ($request->filled('department_id')) {
             $query->where('employees.department_id', $request->department_id);
         }
+
+
+        // NEW: search by name or ID number, across the WHOLE table — not
+        // just whatever page you happen to be on. Needed for both the
+        // Employee List search bar and the Paper Application modal's
+        // employee lookup.
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('employees.first_name', 'LIKE', "%{$search}%")
+                    ->orWhere('employees.surname', 'LIKE', "%{$search}%")
+                    ->orWhere('employees.id_number', 'LIKE', "%{$search}%");
+            });
+        }
         // Apply pagination
         $employees = $query->paginate(10);
         // ->get()

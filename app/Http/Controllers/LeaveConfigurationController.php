@@ -31,7 +31,8 @@ class LeaveConfigurationController extends Controller
         $validated = $request->validate([
             'name'           => 'required|string|max:255',
             'code'           => 'required|string|max:50|unique:leave_configurations,code',
-            'application_to' => 'required|in:permanent,casual,elected,job_order,all',
+            // 'application_to' => 'required|in:permanent,casual,elected,job_order,all',
+            'application_to' => 'required|array',
             'can_carry_over' => 'boolean',
             'can_monetize'   => 'boolean',
             'fixed_days'     => 'nullable|numeric',
@@ -39,7 +40,7 @@ class LeaveConfigurationController extends Controller
             'credit_type'    => 'nullable|in:fixed,monthly',
             'description'    => 'nullable|string',
         ]);
-
+        $validated['application_to'] = implode(',', $request->application_to);
         $config = LeaveConfiguration::create($validated);
 
         return response()->json([
@@ -83,7 +84,9 @@ class LeaveConfigurationController extends Controller
         $validated = $request->validate([
             'name'           => 'sometimes|required|string|max:255',
             'code'           => 'sometimes|required|string|max:50|unique:leave_configurations,code,' . $id,
-            'application_to' => 'sometimes|required|in:permanent,casual,elected,job_order,all',
+            // 'application_to' => 'sometimes|required|in:permanent,casual,elected,job_order,all',
+            'application_to' => 'sometimes|required|array',
+            'application_to.*' => 'in:permanent,casual,elected,job_order,all',
             'can_carry_over' => 'sometimes|boolean',
             'can_monetize'   => 'sometimes|boolean',
             'fixed_days'     => 'nullable|numeric',
@@ -91,6 +94,9 @@ class LeaveConfigurationController extends Controller
             'credit_type'    => 'nullable|in:fixed,monthly',
             'description'    => 'nullable|string',
         ]);
+        if ($request->has('application_to')) {
+            $validated['application_to'] = implode(',', $request->application_to);
+        }
 
         $config = LeaveConfiguration::findOrFail($id);
         $config->update($validated);

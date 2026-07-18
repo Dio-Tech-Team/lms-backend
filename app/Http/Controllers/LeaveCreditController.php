@@ -57,19 +57,17 @@ class LeaveCreditController extends Controller
         // });
         // Filter configurations based on employee status and statutory rules
         $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
-
-            // 1. STATUTORY GATEKEEPER: These apply to EVERYONE (including JOs)
-            if (in_array($config->code, ['VAWC', 'SLB', 'CAL'])) {
-                return true;
-            }
-
-            // 2. JO RESTRICTION: If the status is 'job_order', block everything else
+            // 1. JO SPECIAL CASE: Only Wellness (WL) is allowed for Job Orders
             if ($employee->employment_status === 'job_order') {
-                return false;
+                return $config->code === 'WL';
             }
 
-            // 3. STANDARD LOGIC: Only match if it's 'all' or specifically for their status
-            return $config->application_to === 'all' || $config->application_to === $employee->employment_status;
+            // Replace line 66 with this block:
+            $appTo = $config->application_to;
+            $allowedStatuses = is_array($appTo) ? $appTo : (json_decode($appTo, true) ?? []);
+
+            return in_array('all', $allowedStatuses) || in_array($employee->employment_status, $allowedStatuses);
+            // return in_array('all', $config->application_to) || in_array($employee->employment_status, $config->application_to);
         });
 
         // OPTIMIZED: Get existing credits for this single employee to prevent loop queries
@@ -86,6 +84,11 @@ class LeaveCreditController extends Controller
                 // Fixed Leaves (WL, FL, SPL)
                 if ($config->credit_type === 'fixed') {
                     $startingCredits = $config->fixed_days ?? 0;
+
+                    // SPECIAL OVERRIDE: If it's Wellness for a JO, force the 3 days
+                    if ($config->code === 'WL' && $employee->employment_status === 'job_order') {
+                        $startingCredits = 5;
+                    }
                 }
                 // Monthly Accumulating Leaves (VL, SL) -> Carry over check
                 else if ($config->can_carry_over) {
@@ -153,20 +156,20 @@ class LeaveCreditController extends Controller
             // $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
             //     return $config->application_to === 'all' || $config->application_to === $employee->employment_status;
             // });
+
+            // Inside initializeAllCredits() method
             $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
 
-                // 1. STATUTORY GATEKEEPER
-                if (in_array($config->code, ['VAWC', 'SLB', 'CAL'])) {
-                    return true;
-                }
-
-                // 2. JO RESTRICTION
+                // 1. JO SPECIAL CASE: Only Wellness (WL) is allowed for Job Orders
                 if ($employee->employment_status === 'job_order') {
-                    return false;
+                    return $config->code === 'WL';
                 }
 
-                // 3. STANDARD LOGIC
-                return $config->application_to === 'all' || $config->application_to === $employee->employment_status;
+                // 2. FLEXIBLE STATUS CHECK:
+                // Because of the 'array' cast in your Model, 
+                // $config->application_to is already a PHP array.
+                return in_array('all', $config->application_to) ||
+                    in_array($employee->employment_status, $config->application_to);
             });
 
             // Get already initialized configuration IDs for this employee
@@ -179,6 +182,10 @@ class LeaveCreditController extends Controller
 
                     if ($config->credit_type === 'fixed') {
                         $startingCredits = $config->fixed_days ?? 0;
+                        // SPECIAL OVERRIDE: If it's Wellness for a JO, force the 3 days
+                        if ($config->code === 'WL' && $employee->employment_status === 'job_order') {
+                            $startingCredits = 3;
+                        }
                     } else if ($config->can_carry_over) {
                         // Retrieve carry over balance in-memory
                         $startingCredits = $previousBalancesMap[$employee->id][$config->id] ?? 0;
