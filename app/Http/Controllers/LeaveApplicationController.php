@@ -16,6 +16,7 @@ class LeaveApplicationController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
         // OPTIMIZED: INNER JOIN + vertical partitioning + pagination + status index used
         $applications = LeaveApplication::select([
             'leave_applications.id',
@@ -40,6 +41,10 @@ class LeaveApplicationController extends Controller
             ->join('departments', 'employees.department_id', '=', 'departments.id')
             ->join('leave_configurations', 'leave_applications.leave_configuration_id', '=', 'leave_configurations.id')
             ->leftJoin('users', 'leave_applications.reviewed_by', '=', 'users.id') // LEFT JOIN since reviewer may be null
+            // RESTRICT REGULAR EMPLOYEES TO THEIR OWN APPLICATIONS
+            ->when($user->role !== 'hr_admin', function ($query) use ($user) {
+                $query->where('leave_applications.employee_id', $user->employee?->id);
+            })
             ->when($request->status, function ($query) use ($request) {
                 $query->where('leave_applications.status', $request->status); // uses status index!
             })
@@ -356,7 +361,7 @@ class LeaveApplicationController extends Controller
         return response()->json(['message' => 'Leave application cancelled successfully']);
     }
 
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
         // Vertical partitioning for show
         $application = LeaveApplication::select([
@@ -378,6 +383,13 @@ class LeaveApplicationController extends Controller
             ->join('employees', 'leave_applications.employee_id', '=', 'employees.id')
             ->join('leave_configurations', 'leave_applications.leave_configuration_id', '=', 'leave_configurations.id')
             ->findOrFail($id);
+        $user = $request->user();
+
+        if ($user->role !== 'hr_admin' && $application->employee_id !== $user->employee?->id) {
+            return response()->json([
+                'message' => 'Unauthorized: You can only view your own leave applications.'
+            ], 403);
+        }
 
         return response()->json($application);
     }
