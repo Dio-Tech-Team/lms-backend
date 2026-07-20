@@ -97,12 +97,6 @@ class DepartmentController extends Controller
         return response()->json([
             'message' => 'Department deactivated successfully'
         ], 200);
-        // $affected = Department::where('id', $id)->update(['is_active' => false]);
-
-        // if (!$affected) {
-        //     return response()->json(['message' => 'Department not found'], 404);
-        // }
-
-        // return response()->json(['message' => 'Department deactivated successfully']);
+       
     }
 }

@@ -6,9 +6,6 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\Auth;
-
-
 
 class AuthController extends Controller
 {
@@ -23,11 +20,12 @@ class AuthController extends Controller
         $user = User::select('id', 'username', 'email', 'password', 'role')
             ->where('email', $credentials['email'])
             ->first();
+        // $user = User::where('email', $credentials['email'])->first();
 
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
-            throw ValidationException::withMessages(([
+            throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
-            ]));
+            ]);
         }
 
         $user->tokens()->delete();
@@ -44,6 +42,20 @@ class AuthController extends Controller
             ]
 
         ]);
+    }
+    public function resendVerification(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        // This method is provided by the MustVerifyEmail trait
+        $user->sendEmailVerificationNotification();
+
+        return response()->json(['message' => 'Verification link sent!']);
     }
 
     public function logout(Request $request)

@@ -382,7 +382,7 @@ class LeaveApplicationController extends Controller
         return response()->json($application);
     }
 
-    public function generatePdf($id)
+    public function generatePdf(Request $request, $id)
     {
         $application = LeaveApplication::with([
             'employee.department',
@@ -390,15 +390,20 @@ class LeaveApplicationController extends Controller
             'reviewedBy'
         ])->findOrFail($id);
 
+        $user = $request->user();
+
+        if ($user->role !== 'hr_admin' && $application->employee_id !== $user->employee?->id) {
+            return response()->json([
+                'message' => 'Unauthorized: You can only generate PDF forms for your own leave applications.'
+            ], 403);
+        }
         $code = $application->leaveConfiguration->code;
 
-        // OPTIMIZED: fetch VL and SL configs in ONE query instead of two separate whereHas()
         $configs = LeaveConfiguration::select(['id', 'code'])
             ->whereIn('code', ['VL', 'SL'])
             ->get()
             ->keyBy('code');
 
-        // OPTIMIZED: fetch both credits in ONE query instead of two
         $credits = LeaveCredit::select(['leave_configuration_id', 'total_credits', 'remaining_balance'])
             ->where('employee_id', $application->employee_id)
             ->whereIn('leave_configuration_id', $configs->pluck('id'))

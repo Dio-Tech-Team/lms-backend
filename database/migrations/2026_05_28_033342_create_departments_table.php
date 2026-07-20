@@ -13,10 +13,14 @@ return new class extends Migration
     {
         Schema::create('departments', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('code');
-            $table->boolean('is_active')->default(true);
+            // $table->string('name');
+            // $table->string('code');
+            // $table->boolean('is_active')->default(true);
+            $table->string('name')->unique(); // Prevent duplicate names
+            $table->string('code')->unique(); // Prevent duplicate codes
+            $table->boolean('is_active')->default(true)->index(); // Added index for faster filtering
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

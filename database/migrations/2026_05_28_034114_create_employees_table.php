@@ -14,7 +14,8 @@ return new class extends Migration
         Schema::create('employees', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->foreignId('department_id')->constrained()->onDelete('cascade');
+            // $table->foreignId('department_id')->constrained()->onDelete('cascade');
+            $table->foreignId('department_id')->constrained()->onDelete('cascade')->index();
 
             // Personal Information
             $table->string('first_name');
@@ -45,9 +46,10 @@ return new class extends Migration
             $table->enum('employment_status', ['permanent', 'casual', 'elected', 'job_order']);
             $table->string('position');
             $table->date('date_hired');
-            $table->boolean('is_active')->default(true);
-
+            // $table->boolean('is_active')->default(true);
+            $table->boolean('is_active')->default(true)->index();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

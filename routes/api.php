@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+// use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use App\Http\Controllers\{
     AuthController,
     EmployeeController,
@@ -14,7 +15,18 @@ use App\Http\Controllers\{
 };
 
 // 1. PUBLIC ROUTES
-Route::post('/login', [AuthController::class, 'login']);
+// Route::post('/login', [AuthController::class, 'login']);
+// In routes/api.php
+Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
+// Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
+//     $request->fulfill();
+//     return response()->json(['message' => 'Email verified successfully.']);
+// })->middleware(['auth:sanctum', 'signed'])->name('verification.verify');
+// Remove 'auth:sanctum' from this route
+// Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
+//     $request->fulfill();
+//     return response()->json(['message' => 'Email verified successfully.']);
+// })->middleware(['signed'])->name('verification.verify'); // <-- Removed 'auth:sanctum'
 
 // 2. AUTHENTICATED ROUTES
 Route::middleware('auth:sanctum')->group(function () {

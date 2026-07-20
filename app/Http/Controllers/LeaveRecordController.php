@@ -155,31 +155,7 @@ class LeaveRecordController extends Controller
             ]),
         ]);
     }
-    // public function summary()
-    // {
-    //     $summary = Employee::select([
-    //         'employees.id',
-    //         'employees.first_name',
-    //         'employees.surname',
-    //         'employees.position',
-    //         'departments.name as department_name',
-    //     ])
-    //         ->join('departments', 'employees.department_id', '=', 'departments.id')
-    //         ->withSum(['leaveRecords as vl_used' => function ($query) {
-    //             $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
-    //                 ->where('leave_configurations.code', 'VL')
-    //                 ->whereYear('leave_records.created_at', now()->year);
-    //         }], 'days_taken')
-    //         ->withSum(['leaveRecords as sl_used' => function ($query) {
-    //             $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
-    //                 ->where('leave_configurations.code', 'SL')
-    //                 ->whereYear('leave_records.created_at', now()->year);
-    //         }], 'days_taken')
-    //         ->where('employees.is_active', true)
-    //         ->paginate(10);
 
-    //     return response()->json($summary);
-    // }
     public function summary(Request $request)
     {
         $year = $request->year ?? now()->year;

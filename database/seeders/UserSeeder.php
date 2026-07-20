@@ -28,6 +28,15 @@ class UserSeeder extends Seeder
                 'role' => 'hr_admin'
             ]
         );
+        User::updateOrCreate(
+            ['username' => 'hradmin'],
+            [
+                'email' => 'hradmin@gmail.com',
+                'password' => Hash::make('@Password123'),
+                'role' => 'hr_admin',
+                // 'email_verified_at' => now() // Add this line
+            ]
+        );
 
 
         $employees = [
@@ -40,14 +49,13 @@ class UserSeeder extends Seeder
             ['Maria', 'Bautista'],
             ['Ramon', 'Perez'],
             ['Rowena', 'Dela Cruz'],
-            ['Edwardo', 'Panganiban'],
+            ['Eduardo', 'Panganiban'],
             ['Angelita', 'Dizon'],
-
             ['Jose', 'Ocampo'],
             ['Carmela', 'Tolentino'],
-            ['Danilo', 'Ramoz'],
+            ['Danilo', 'Ramos'],
             ['Rowelson', 'Garcia'],
-            ['Edwardo', 'Manalili'],
+            ['Eduardo', 'Manalili'],
 
             ['Catherine', 'Manzano'],
             ['Kenedy', 'Quilang'],
@@ -65,6 +73,7 @@ class UserSeeder extends Seeder
             ['Jhon', 'Reyes'],
             ['Jayson', 'Espiritu'],
             ['Joy', 'Dizon'],
+            ['Sam', 'Blanza'],
             ['Nick', 'Pascual'],
 
             ['Leonardo', 'Meneses'],

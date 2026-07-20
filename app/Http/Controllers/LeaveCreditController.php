@@ -51,10 +51,6 @@ class LeaveCreditController extends Controller
 
         $creditsToInsert = [];
 
-        // Filter configurations based on employee status
-        // $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
-        //     return $config->application_to === 'all' || $config->application_to === $employee->employment_status;
-        // });
         // Filter configurations based on employee status and statutory rules
         $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
             // 1. JO SPECIAL CASE: Only Wellness (WL) is allowed for Job Orders
@@ -153,9 +149,6 @@ class LeaveCreditController extends Controller
         $creditsToInsert = [];
 
         foreach ($employees as $employee) {
-            // $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
-            //     return $config->application_to === 'all' || $config->application_to === $employee->employment_status;
-            // });
 
             // Inside initializeAllCredits() method
             $eligibleConfigs = $configs->filter(function ($config) use ($employee) {

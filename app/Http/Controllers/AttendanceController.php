@@ -184,7 +184,12 @@ class AttendanceController extends Controller
                             $errors[] = "[{$sheetName}] Employee not found: {$name}";
                             continue;
                         }
-
+                        // Automatically skip JO employees even if they appear in the file
+                        // $status = strtolower($employee->employment_type ?? '');
+                        // if (in_array($status, ['jo', 'job_order', 'cos', 'job order'])) {
+                        //     continue;
+                        // }
+                        // ----------------------
                         $alreadyExists = Attendance::where('employee_id', $employee->id)
                             ->where('month', $monthName)
                             ->where('year', $year)
@@ -333,8 +338,49 @@ class AttendanceController extends Controller
         return isset($matches[1]) ? (int) $matches[1] : 0;
     }
 
+    // private function updateLeaveCredits(Employee $employee, int $year, array $computation)
+    // {
+    //     $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
+    //     $slConfig = LeaveConfiguration::where('code', 'SL')->first();
+
+    //     if ($vlConfig) {
+    //         $vlCredit = LeaveCredit::firstOrCreate(
+    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $vlConfig->id, 'year' => $year],
+    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
+    //         );
+    //         $netVl = $computation['vl_earned'] - $computation['tardiness_equivalent_days'];
+    //         $vlCredit->total_credits += $netVl;
+    //         $vlCredit->remaining_balance += $netVl;
+    //         $vlCredit->last_updated = now();
+    //         $vlCredit->save();
+    //     }
+
+    //     if ($slConfig) {
+    //         $slCredit = LeaveCredit::firstOrCreate(
+    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $slConfig->id, 'year' => $year],
+    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
+    //         );
+    //         $slCredit->total_credits += $computation['sl_earned'];
+    //         $slCredit->remaining_balance += $computation['sl_earned'];
+    //         $slCredit->last_updated = now();
+    //         $slCredit->save();
+    //     }
+    // }
     private function updateLeaveCredits(Employee $employee, int $year, array $computation)
     {
+        // 1. Guard Clause: Skip non-plantilla staff immediately
+        // if ($employee->employment_type === 'job_order') {
+        //     return;
+        // }
+        // Normalize the database value for a reliable comparison
+        // $status = strtolower($employee->employment_type ?? '');
+
+        // // Comprehensive check for non-plantilla staff
+        // if (in_array($status, ['jo', 'job_order', 'cos', 'job order'])) {
+        //     return;
+        // }
+
+        // 2. Fetch configs only when necessary
         $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
         $slConfig = LeaveConfiguration::where('code', 'SL')->first();
 

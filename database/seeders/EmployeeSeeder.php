@@ -304,9 +304,9 @@ class EmployeeSeeder extends Seeder
 
             // 9. Edwardo Panganiban
             [
-                'username' => 'edwardopanganiban',
+                'username' => 'eduardopanganiban',
                 'department' => 'MACO',
-                'first_name' => 'Edwardo',
+                'first_name' => 'Eduardo',
                 'middle_name' => 'F',
                 'surname' => 'Panganiban',
                 'id_number' => 'LGU-MACO-004',
@@ -418,11 +418,11 @@ class EmployeeSeeder extends Seeder
 
             // 13. Danilo Ramoz
             [
-                'username' => 'daniloramoz',
+                'username' => 'daniloramos',
                 'department' => 'MADO',
                 'first_name' => 'Danilo',
                 'middle_name' => 'Z',
-                'surname' => 'Ramoz',
+                'surname' => 'Ramos',
                 'id_number' => 'LGU-MADO-003',
                 'birthdate' => '1995-01-11',
                 'place_of_birth' => 'Sinabbran, Echague, Isabela',
@@ -476,9 +476,9 @@ class EmployeeSeeder extends Seeder
 
             // 15. Edwardo Manalili
             [
-                'username' => 'edwardomanalili',
+                'username' => 'eduardomanalili',
                 'department' => 'MAGO',
-                'first_name' => 'Edwardo',
+                'first_name' => 'Eduardo',
                 'middle_name' => 'F',
                 'surname' => 'Manalili',
                 'id_number' => 'LGU-MAGO-002',
@@ -893,7 +893,36 @@ class EmployeeSeeder extends Seeder
                 'date_hired' => '2016-01-21',
             ],
 
-            // 30. Nick Pascual
+            // 30 Sam blanza
+            [
+                'username' => 'samblanza',
+                'department' => 'MTCO',
+                'first_name' => 'Sam',
+                'middle_name' => 'S',
+                'surname' => 'Blanza',
+                'id_number' => 'LGU-MTCO-001',
+                'birthdate' => '1991-04-05',
+                'place_of_birth' => 'Soyung, Echague, Isabela',
+                'sex' => 'male',
+                'civil_status' => 'married',
+                'height' => "5'8",
+                'weight' => '65',
+                'bloodtype' => 'O',
+                'highest_educational_attainment' => 'graduated',
+                'residential_address' => 'Soyung, Echague, Isabela',
+                'contact_number' => '09693779878',
+                'umid_id' => '1234-5678901-2',
+                'pagibig_id' => '1234-5678-9012',
+                'philhealth_number' => '12-345678901-2',
+                'psn_number' => '1234-5678-9012',
+                'tin_number' => '123-456-789',
+                'employment_status' => 'job_order',
+                'position' => 'Messenger',
+                'date_hired' => '2016-01-21',
+            ],
+
+
+            // 31. Nick Pascual
             [
                 'username' => 'nickpascual',
                 'department' => 'MTO',
@@ -921,7 +950,7 @@ class EmployeeSeeder extends Seeder
                 'date_hired' => '2026-01-12',
             ],
 
-            // 31. Leonardo Meneses
+            // 32. Leonardo Meneses
             [
                 'username' => 'leonardomeneses',
                 'department' => 'MO',
@@ -949,7 +978,7 @@ class EmployeeSeeder extends Seeder
                 'date_hired' => '2016-10-11',
             ],
 
-            // 32. Mark Soriano
+            // 33. Mark Soriano
             [
                 'username' => 'marksoriano',
                 'department' => 'POSU',
@@ -977,7 +1006,7 @@ class EmployeeSeeder extends Seeder
                 'date_hired' => '2017-01-20',
             ],
 
-            // 33. Mark Rama
+            // 34. Mark Rama
             [
                 'username' => 'markrama',
                 'department' => 'VMSBO',
@@ -1005,7 +1034,7 @@ class EmployeeSeeder extends Seeder
                 'date_hired' => '2016-10-20',
             ],
 
-            // 34. Kiel Ramom
+            // 35. Kiel Ramom
             [
                 'username' => 'kielramon',
                 'department' => 'VMSBO',

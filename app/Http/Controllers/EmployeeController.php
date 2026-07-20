@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Employee;
+// use Illuminate\Auth\Events\Registered;
 use App\Models\EmploymentHistory;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use App\Models\LeaveConfiguration;
 use App\Http\Controllers\LeaveCreditController;
@@ -49,11 +49,6 @@ class EmployeeController extends Controller
             $query->where('employees.department_id', $request->department_id);
         }
 
-
-        // NEW: search by name or ID number, across the WHOLE table — not
-        // just whatever page you happen to be on. Needed for both the
-        // Employee List search bar and the Paper Application modal's
-        // employee lookup.
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -64,23 +59,6 @@ class EmployeeController extends Controller
         }
         // Apply pagination
         $employees = $query->paginate(10);
-        // ->get()
-        // ->map(function ($employee) {
-        //     return [
-        //         'id'                => $employee->id,
-        //         'username'          => $employee->username,
-        //         'email'             => $employee->email,
-        //         'first_name'        => $employee->first_name,
-        //         'middle_name'       => $employee->middle_name,
-        //         'surname'           => $employee->surname,
-        //         'id_number'         => $employee->id_number,
-        //         'employment_status' => $employee->employment_status,
-        //         'position'          => $employee->position,
-        //         'department'        => $employee->department_name,
-        //         'date_hired'        => $employee->date_hired,
-        //         'is_active'         => $employee->is_active,
-        //     ];
-        // });
 
         return response()->json($employees);
     }
@@ -157,6 +135,8 @@ class EmployeeController extends Controller
                 'role' => 'employee',
             ]);
 
+            // event(new Registered($user));
+
 
             $employee = Employee::create([
                 'user_id'                          => $user->id,
@@ -193,11 +173,6 @@ class EmployeeController extends Controller
                 'effective_date'               => $employee->date_hired,
                 'remarks'                       => 'Initial employment record',
             ]);
-            // // 🔥 AUTOMATIC INITIALIZATION HAPPENS HERE
-            // $creditController = new LeaveCreditController();
-            // $targetYear = Carbon::parse($employee->date_hired)->year;
-            // $creditController->initializeSingleEmployeeCredits($employee->id, $targetYear);
-            // // ----------------------------------------------------
             try {
                 $creditController = new LeaveCreditController();
                 $hireYear = Carbon::parse($employee->date_hired)->year;
@@ -226,8 +201,6 @@ class EmployeeController extends Controller
 
     public function show(string $id)
     {
-        // OPTIMIZED: INNER JOIN for user and department (always exist)
-        // LEFT JOIN (with) kept for employment_history (may be empty)
         $employee = Employee::select([
             'employees.id',
             'employees.department_id',
@@ -275,9 +248,6 @@ class EmployeeController extends Controller
                 }
             ])
             ->findOrFail($id);
-
-        // OPTIMIZED: Use already-loaded employment_history collection
-        // instead of making a new DB query inside calculateStepIncrement
         $stepIncrementInfo = $this->calculateStepIncrement($employee);
         $loyaltyPayInfo    = $this->calculateLoyaltyPay($employee);
         $retirementInfo    = $this->calculateRetirement($employee);
@@ -317,8 +287,6 @@ class EmployeeController extends Controller
         ]);
     }
 
-
-
     public function update(Request $request, string $id)
     {
         $employee = Employee::findOrFail($id);
@@ -347,7 +315,7 @@ class EmployeeController extends Controller
             'employment_status'                => 'sometimes|in:permanent,casual,elected,job_order',
             'date_hired'                       => 'sometimes|date',
         ]);
-        // OPTIMIZED: single findOrFail, no redundant queries
+
         $employee = Employee::findOrFail($id);
         $employee->update($validated);
 
@@ -359,7 +327,6 @@ class EmployeeController extends Controller
 
     public function calculateStepIncrement($employee)
     {
-        // OPTIMIZED: Use already-loaded collection instead of new DB query
         $employmentHistory = $employee->relationLoaded('employment_history')
             ? $employee->employment_history
             : $employee->employment_history()->orderBy('effective_date', 'desc')->get();
@@ -399,35 +366,6 @@ class EmployeeController extends Controller
             'all_steps'      => $allSteps,
         ];
     }
-
-    // private function calculateLoyaltyPay($employee)
-    // {
-    //     $startDate = \Carbon\Carbon::parse($employee->date_hired);
-    //     $yearsServed = $startDate->diffInYears(now());
-
-    //     if ($yearsServed < 10) {
-    //         $yearsUntilFirst = 10 - $yearsServed;
-    //         return [
-    //             'eligible' => false,
-    //             'years_served' => $yearsServed,
-    //             'years_until_next' => $yearsUntilFirst,
-    //             'next_milestone' => 10,
-    //         ];
-    //     }
-
-    //     $yearsAfterFirst = $yearsServed - 10;
-    //     $milestonesPassed = floor($yearsAfterFirst / 5) + 1;
-    //     $nextMilestone = 10 + ($milestonesPassed * 5);
-    //     $yearsUntilNext = $nextMilestone - $yearsServed;
-
-    //     return [
-    //         'eligible' => true,
-    //         'years_served' => $yearsServed,
-    //         'milestones_received' => (int) $milestonesPassed,
-    //         'years_until_next' => $yearsUntilNext,
-    //         'next_milestone' => $nextMilestone,
-    //     ];
-    // }
     private function calculateLoyaltyPay($employee)
     {
         if ($employee->employment_status !== 'permanent') {
@@ -466,7 +404,7 @@ class EmployeeController extends Controller
             ];
         }
         $yearsAfterFirst = $yearsServed - 10;
-        $milestonesPassed = floor($yearsAfterFirst / 5) + 1; // +1 for the initial 10-year milestone
+        $milestonesPassed = floor($yearsAfterFirst / 5) + 1;
         $nextMilestone = 10 + ($milestonesPassed * 5);
         $yearsUntilNext = $nextMilestone - $yearsServed;
 
@@ -497,20 +435,6 @@ class EmployeeController extends Controller
             'eligible_now'     => $age >= 65,
         ];
     }
-    // NEW: Employee's Leave Card — reconstructs the physical LGU leave ledger
-    // (Period | Particulars | Earned | Abs W/P | Abs WOP | Balance) per leave
-    // type, by merging two existing data sources chronologically:
-    //   - Attendance rows  = "Earned" entries (monthly VL/SL accrual + absences)
-    //   - LeaveRecord rows = "Used" entries (approved leave actually taken)
-    // Running balance is computed as a cumulative sum across the merged,
-    // date-sorted list — same additive logic already used for LeaveCredit
-    // totals, just preserved per-period instead of collapsed into one number.
-    //
-    // ASSUMPTION: leave_records.leave_configuration_id is the FK to
-    // leave_configurations (matching the pattern used in leave_credits).
-    // If your leave_records table uses a different column name (e.g.
-    // leave_type_id), update the two ->where('leave_configuration_id', ...)
-    // lines in buildLeaveCardForType() below.
     public function leaveCard(string $id)
     {
         $employee = Employee::select('id', 'first_name', 'surname', 'position')->findOrFail($id);
@@ -533,7 +457,6 @@ class EmployeeController extends Controller
     {
         $entries = [];
 
-        // EARNED entries — one row per monthly attendance upload
         $attendanceRows = \App\Models\Attendance::where('employee_id', $employee->id)->get();
 
         foreach ($attendanceRows as $row) {
