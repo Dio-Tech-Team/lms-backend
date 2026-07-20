@@ -336,17 +336,30 @@ class EmployeeController extends Controller
                 || $history->new_position !== $history->previous_position;
         });
 
-        if (!$latestReset || $employee->employment_status !== 'permanent') {
+        // if (!$latestReset || $employee->employment_status !== 'permanent') {
+        //     return [
+        //         'current_step' => null,
+        //         'message'      => 'Not applicable - employee is not permanent',
+        //         'all_steps'    => [],
+        //     ];
+        // }
+        if ($employee->employment_status !== 'permanent') {
             return [
                 'current_step' => null,
                 'message'      => 'Not applicable - employee is not permanent',
                 'all_steps'    => [],
             ];
         }
-
-        $startDate   = \Carbon\Carbon::parse($latestReset->effective_date);
+        // $startDate   = \Carbon\Carbon::parse($latestReset->effective_date);
+        // $yearsServed = max(0, $startDate->diffInYears(now()));
+        // $currentStep = min(8, max(1, floor($yearsServed / 3) + 1));
+        // $nextStepDate = $startDate->copy()->addYears($currentStep * 3);
+        // Fallback to date_hired if there's no history row to anchor from
+        $startDate   = $latestReset
+            ? \Carbon\Carbon::parse($latestReset->effective_date)
+            : \Carbon\Carbon::parse($employee->date_hired);
         $yearsServed = max(0, $startDate->diffInYears(now()));
-        $currentStep = min(8, max(1, floor($yearsServed / 3) + 1));
+        $currentStep = min(8, floor($yearsServed / 3) + 1);
         $nextStepDate = $startDate->copy()->addYears($currentStep * 3);
 
         $allSteps = [];
@@ -399,6 +412,7 @@ class EmployeeController extends Controller
                 'eligible'          => false,
                 'since'             => $startDate->format('Y-m-d'),
                 'years_served'      => $yearsServed,
+                'milestones_received'   => 0, //new added 
                 'years_until_next'  => $yearsUntilFirst,
                 'next_milestone'    => 10,
             ];
