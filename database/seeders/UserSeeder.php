@@ -21,13 +21,14 @@ class UserSeeder extends Seeder
         //     'role' => 'hr_admin'
         // ]);
         User::updateOrCreate(
-            ['username' => 'hradmin'],
+            ['username' => 'superadmin'],
             [
-                'email' => 'hradmin@gmail.com',
+                'email'    => 'superadmin@gmail.com',
                 'password' => Hash::make('@Password123'),
-                'role' => 'hr_admin'
+                'role'     => 'super_admin',
             ]
         );
+
         User::updateOrCreate(
             ['username' => 'hradmin'],
             [

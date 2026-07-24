@@ -43,20 +43,20 @@ class AuthController extends Controller
 
         ]);
     }
-    public function resendVerification(Request $request)
-    {
-        $request->validate(['email' => 'required|email']);
-        $user = User::where('email', $request->email)->first();
+    // public function resendVerification(Request $request)
+    // {
+    //     $request->validate(['email' => 'required|email']);
+    //     $user = User::where('email', $request->email)->first();
 
-        if (!$user) {
-            return response()->json(['message' => 'User not found.'], 404);
-        }
+    //     if (!$user) {
+    //         return response()->json(['message' => 'User not found.'], 404);
+    //     }
 
-        // This method is provided by the MustVerifyEmail trait
-        $user->sendEmailVerificationNotification();
+    //     // This method is provided by the MustVerifyEmail trait
+    //     $user->sendEmailVerificationNotification();
 
-        return response()->json(['message' => 'Verification link sent!']);
-    }
+    //     return response()->json(['message' => 'Verification link sent!']);
+    // }
 
     public function logout(Request $request)
     {

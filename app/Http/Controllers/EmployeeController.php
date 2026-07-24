@@ -123,7 +123,7 @@ class EmployeeController extends Controller
 
         // Authorization check before DB transaction
         $admin = request()->user();
-        if (!$admin || $admin->role !== 'hr_admin') {
+        if (!$admin || $admin->role !== 'super_admin') {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -597,10 +597,12 @@ class EmployeeController extends Controller
     {
         // OPTIMIZED: check auth first before any DB query
         $user = request()->user();
-        if (!$user || $user->role !== 'hr_admin') {
+        // if (!$user || $user->role !== 'super_admin') {
+        //     return response()->json(['message' => 'Forbidden'], 403);
+        // }
+        if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
-
         // Single query: find and update in one go
         $affected = Employee::where('id', $id)->update(['is_active' => false]);
 

@@ -11,7 +11,8 @@ use App\Http\Controllers\{
     LeaveRecordController,
     LeaveApplicationController,
     EmploymentHistoryController,
-    AttendanceController
+    AttendanceController,
+    UserController
 };
 
 // 1. PUBLIC ROUTES
@@ -51,7 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // --- Leave Configurations ---
-    Route::apiResource('leave-configurations', LeaveConfigurationController::class);
+    // Route::apiResource('leave-configurations', LeaveConfigurationController::class);
 
     // --- Leave Credits ---
     Route::prefix('employees/{employeeId}/leave-credits')->group(function () {
@@ -71,8 +72,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- Attendance ---
     Route::get('attendance', [AttendanceController::class, 'index']);
 
+    Route::get('leave-configurations', [LeaveConfigurationController::class, 'index']);
+    Route::get('leave-configurations/{id}', [LeaveConfigurationController::class, 'show']);
+
     // 3. HR ADMIN ONLY ROUTES (Using your new Middleware)
-    Route::middleware('role:hr_admin')->group(function () {
+    Route::middleware('role:super_admin,hr_admin')->group(function () {
         // Leave Application Admin Actions
         Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
         Route::post('leave-applications/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
@@ -86,5 +90,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Attendance Admin
         Route::post('attendance/upload', [AttendanceController::class, 'upload']);
+    });
+
+    // 4. SUPER ADMIN ONLY ROUTES
+    Route::middleware('role:super_admin')->group(function () {
+        // Account Management
+        Route::apiResource('users', UserController::class)->only(['index', 'store', 'destroy']);
+
+        Route::post('leave-configurations', [LeaveConfigurationController::class, 'store']);
+        Route::put('leave-configurations/{id}', [LeaveConfigurationController::class, 'update']);
+        Route::delete('leave-configurations/{id}', [LeaveConfigurationController::class, 'destroy']);
     });
 });

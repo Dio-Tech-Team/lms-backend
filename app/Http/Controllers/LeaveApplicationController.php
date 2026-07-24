@@ -14,6 +14,11 @@ use Illuminate\Support\Facades\DB;
 
 class LeaveApplicationController extends Controller
 {
+
+    private function isAdmin($user): bool
+    {
+        return $user && in_array($user->role, ['hr_admin', 'super_admin'], true);
+    }
     public function index(Request $request)
     {
         $user = $request->user();
@@ -42,7 +47,7 @@ class LeaveApplicationController extends Controller
             ->join('leave_configurations', 'leave_applications.leave_configuration_id', '=', 'leave_configurations.id')
             ->leftJoin('users', 'leave_applications.reviewed_by', '=', 'users.id') // LEFT JOIN since reviewer may be null
             // RESTRICT REGULAR EMPLOYEES TO THEIR OWN APPLICATIONS
-            ->when($user->role !== 'hr_admin', function ($query) use ($user) {
+            ->when(!$this->isAdmin($user), function ($query) use ($user) {
                 $query->where('leave_applications.employee_id', $user->employee?->id);
             })
             ->when($request->status, function ($query) use ($request) {
@@ -88,8 +93,13 @@ class LeaveApplicationController extends Controller
             ], 403);
         }
 
+        // if (($request->filled('employee_id') || $request->boolean('is_paper_submission'))
+        //     && (!$request->user() || $request->user()->role !== 'hr_admin')
+        // ) {
+        //     return response()->json(['message' => 'Forbidden'], 403);
+        // }
         if (($request->filled('employee_id') || $request->boolean('is_paper_submission'))
-            && (!$request->user() || $request->user()->role !== 'hr_admin')
+            && !$this->isAdmin($request->user())
         ) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
@@ -215,49 +225,6 @@ class LeaveApplicationController extends Controller
             'remaining_balance'    => $credit->remaining_balance ?? 0,
         ], 201);
     }
-    // public function approve(Request $request, $id)
-    // {
-    //     $application = LeaveApplication::findOrFail($id);
-
-    //     if ($application->status !== 'pending') {
-    //         return response()->json([
-    //             'message' => 'Application is already ' . $application->status,
-    //         ], 400);
-    //     }
-
-    //     $credit = LeaveCredit::where('employee_id', $application->employee_id)
-    //         ->where('leave_configuration_id', $application->leave_configuration_id)
-    //         ->where('year', now()->year)
-    //         ->first();
-
-    //     DB::transaction(function () use ($application, $request, $credit) {
-    //         $application->update([
-    //             'status'      => 'approved',
-    //             'reviewed_by' => $request->user()->id,
-    //             'reviewed_at' => now(),
-    //         ]);
-
-    //         LeaveRecord::create([
-    //             'employee_id'     => $application->employee_id,
-    //             'leave_configuration_id' => $application->leave_configuration_id,
-    //             'recorded_by'     => $request->user()->id,
-    //             'start_date'      => $application->start_date,
-    //             'end_date'        => $application->end_date,
-    //             'days_taken'      => $application->days_applied,
-    //             'remarks'         => $application->id,
-    //         ]);
-
-    //         if ($credit) {
-    //             $credit->used_credits      += $application->days_applied;
-    //             $credit->remaining_balance -= $application->days_applied;
-    //             $credit->last_updated       = now();
-    //             $credit->save();
-    //         }
-    //     });
-
-    //     return response()->json(['message' => 'Leave application approved successfully']);
-    // }
-
     public function approve(Request $request, $id)
     {
         $application = LeaveApplication::findOrFail($id);
@@ -385,7 +352,13 @@ class LeaveApplicationController extends Controller
             ->findOrFail($id);
         $user = $request->user();
 
-        if ($user->role !== 'hr_admin' && $application->employee_id !== $user->employee?->id) {
+        // if ($user->role !== 'hr_admin' && $application->employee_id !== $user->employee?->id) {
+        //     return response()->json([
+        //         'message' => 'Unauthorized: You can only view your own leave applications.'
+        //     ], 403);
+        // }
+
+        if (!$this->isAdmin($user) && $application->employee_id !== $user->employee?->id) {
             return response()->json([
                 'message' => 'Unauthorized: You can only view your own leave applications.'
             ], 403);
@@ -404,11 +377,18 @@ class LeaveApplicationController extends Controller
 
         $user = $request->user();
 
-        if ($user->role !== 'hr_admin' && $application->employee_id !== $user->employee?->id) {
+        // if ($user->role !== 'hr_admin' && $application->employee_id !== $user->employee?->id) {
+        //     return response()->json([
+        //         'message' => 'Unauthorized: You can only generate PDF forms for your own leave applications.'
+        //     ], 403);
+        // }
+
+        if (!$this->isAdmin($user) && $application->employee_id !== $user->employee?->id) {
             return response()->json([
                 'message' => 'Unauthorized: You can only generate PDF forms for your own leave applications.'
             ], 403);
         }
+
         $code = $application->leaveConfiguration->code;
 
         $configs = LeaveConfiguration::select(['id', 'code'])

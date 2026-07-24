@@ -257,6 +257,7 @@ class LeaveCreditController extends Controller
             ->where('leave_credits.employee_id', $employee->id)
             ->where('leave_credits.year', now()->year)
             ->select(
+                'leave_configurations.id as leave_configuration_id',
                 'leave_configurations.name',
                 'leave_configurations.code',
                 'leave_credits.remaining_balance'

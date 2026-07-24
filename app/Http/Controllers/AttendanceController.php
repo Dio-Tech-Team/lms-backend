@@ -23,119 +23,6 @@ class AttendanceController extends Controller
     {
         $this->computationService = $computationService;
     }
-
-    // public function upload(Request $request)
-    // {
-    //     $request->validate([
-    //         'file'       => 'required|file|mimes:xlsx,xls,csv',
-    //         'month'      => 'required|integer|min:1|max:12',
-    //         'year'       => 'required|integer',
-    //         'department' => 'nullable|string',
-    //     ]);
-
-    //     $file = $request->file('file');
-    //     $month = $request->month;
-    //     $year = $request->year;
-
-    //     $spreadsheet = IOFactory::load($file->getPathname());
-    //     $sheet = $spreadsheet->getActiveSheet();
-    //     $rows = $sheet->toArray();
-
-    //     $results = [];
-    //     $errors = [];
-    //     $skipped = [];
-
-    //     try {
-    //         DB::transaction(function () use ($rows, $month, $year, $request, &$results, &$errors, &$skipped) {
-    //             $monthName = Carbon::create($year, $month, 1)->format('F');
-
-    //             foreach ($rows as $index => $row) {
-    //                 if ($index < 2) continue; 
-
-    //                 $name = trim($row[0] ?? '');
-    //                 if (empty($name)) continue;
-
-    //                 $employee = $this->findEmployeeByName($name);
-
-    //                 if (!$employee) {
-    //                     $errors[] = "Employee not found: {$name}";
-    //                     continue;
-    //                 }
-
-    //                 $alreadyExists = Attendance::where('employee_id', $employee->id)
-    //                     ->where('month', $monthName)
-    //                     ->where('year', $year)
-    //                     ->exists();
-
-    //                 if ($alreadyExists) {
-    //                     $skipped[] = "{$employee->first_name} {$employee->surname}: already has attendance for {$monthName} {$year}, skipped.";
-    //                     continue;
-    //                 }
-
-    //                 $absentWithLeaveRaw = trim($row[2] ?? '');
-    //                 $absentWithoutLeaveRaw = trim($row[3] ?? '');
-
-    //                 $absentWithLeaveDays = $this->countDatesInString($absentWithLeaveRaw);
-    //                 $absentWithoutLeaveDays = $this->countDatesInString($absentWithoutLeaveRaw);
-
-    //                 $lateAm = $this->parseMinutes($row[4] ?? '');
-    //                 $latePm = $this->parseMinutes($row[5] ?? '');
-    //                 $utAm = $this->parseMinutes($row[6] ?? '');
-    //                 $utPm = $this->parseMinutes($row[7] ?? '');
-
-    //                 $computation = $this->computationService->computeMonthlyCredits([
-    //                     'month'                       => $month,
-    //                     'year'                        => $year,
-    //                     'absent_with_leave_days'      => $absentWithLeaveDays,
-    //                     'absent_without_leave_days'   => $absentWithoutLeaveDays,
-    //                     'late_am_minutes'             => $lateAm,
-    //                     'late_pm_minutes'             => $latePm,
-    //                     'undertime_am_minutes'        => $utAm,
-    //                     'undertime_pm_minutes'        => $utPm,
-    //                 ]);
-    //                 Attendance::create([
-    //                     'employee_id'                 => $employee->id,
-    //                     'month'                       => $monthName,
-    //                     'year'                        => $year,
-    //                     'total_working_days'          => 30,
-    //                     'absent_with_leave_days'      => $absentWithLeaveDays,
-    //                     'absent_without_leave_days'   => $absentWithoutLeaveDays,
-    //                     'late_am_minutes'             => $lateAm,
-    //                     'late_pm_minutes'             => $latePm,
-    //                     'undertime_am_minutes'        => $utAm,
-    //                     'undertime_pm_minutes'        => $utPm,
-    //                     'vl_earned'                   => $computation['vl_earned'],
-    //                     'sl_earned'                   => $computation['sl_earned'],
-    //                     'tardiness_equivalent_days'   => $computation['tardiness_equivalent_days'],
-    //                     'uploaded_by'                 => $request->user()->id,
-    //                 ]);
-
-    //                 $this->updateLeaveCredits($employee, $year, $computation);
-
-    //                 $results[] = [
-    //                     'employee' => $employee->first_name . ' ' . $employee->surname,
-    //                     'vl_earned' => $computation['vl_earned'],
-    //                     'sl_earned' => $computation['sl_earned'],
-    //                     'tardiness_deducted' => $computation['tardiness_equivalent_days'],
-    //                 ];
-    //             }
-    //         });
-    //     } catch (\Throwable $e) {
-    //         return response()->json([
-    //             'message' => 'Attendance processing failed — no changes were saved. ' . $e->getMessage(),
-    //             'results' => [],
-    //             'errors'  => [],
-    //             'skipped' => [],
-    //         ], 500);
-    //     }
-
-    //     return response()->json([
-    //         'message' => 'Attendance processed successfully',
-    //         'results' => $results,
-    //         'errors'  => $errors,
-    //         'skipped' => $skipped,
-    //     ]);
-    // }
     public function upload(Request $request)
     {
         $request->validate([
@@ -151,10 +38,6 @@ class AttendanceController extends Controller
 
         $spreadsheet = IOFactory::load($file->getPathname());
 
-        // CHANGED: loop over every sheet in the workbook instead of only
-        // getActiveSheet(). A single-sheet file (old behavior) still works
-        // fine here — getAllSheets() just returns that one sheet, so nothing
-        // breaks for anyone still uploading one department at a time.
         $sheets = $spreadsheet->getAllSheets();
 
         $results = [];
@@ -338,49 +221,10 @@ class AttendanceController extends Controller
         return isset($matches[1]) ? (int) $matches[1] : 0;
     }
 
-    // private function updateLeaveCredits(Employee $employee, int $year, array $computation)
-    // {
-    //     $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
-    //     $slConfig = LeaveConfiguration::where('code', 'SL')->first();
 
-    //     if ($vlConfig) {
-    //         $vlCredit = LeaveCredit::firstOrCreate(
-    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $vlConfig->id, 'year' => $year],
-    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
-    //         );
-    //         $netVl = $computation['vl_earned'] - $computation['tardiness_equivalent_days'];
-    //         $vlCredit->total_credits += $netVl;
-    //         $vlCredit->remaining_balance += $netVl;
-    //         $vlCredit->last_updated = now();
-    //         $vlCredit->save();
-    //     }
-
-    //     if ($slConfig) {
-    //         $slCredit = LeaveCredit::firstOrCreate(
-    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $slConfig->id, 'year' => $year],
-    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
-    //         );
-    //         $slCredit->total_credits += $computation['sl_earned'];
-    //         $slCredit->remaining_balance += $computation['sl_earned'];
-    //         $slCredit->last_updated = now();
-    //         $slCredit->save();
-    //     }
-    // }
     private function updateLeaveCredits(Employee $employee, int $year, array $computation)
     {
-        // 1. Guard Clause: Skip non-plantilla staff immediately
-        // if ($employee->employment_type === 'job_order') {
-        //     return;
-        // }
-        // Normalize the database value for a reliable comparison
-        // $status = strtolower($employee->employment_type ?? '');
 
-        // // Comprehensive check for non-plantilla staff
-        // if (in_array($status, ['jo', 'job_order', 'cos', 'job order'])) {
-        //     return;
-        // }
-
-        // 2. Fetch configs only when necessary
         $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
         $slConfig = LeaveConfiguration::where('code', 'SL')->first();
 
