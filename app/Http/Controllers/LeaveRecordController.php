@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\LeaveRecord;
 use App\Models\LeaveCredit;
 use App\Models\Employee;
+use App\Models\ActivityLog;
 use Illuminate\Support\Facades\DB;
 
 class LeaveRecordController extends Controller
@@ -41,11 +42,7 @@ class LeaveRecordController extends Controller
                         ->orWhere('employees.surname', 'LIKE', '%' . $request->search . '%');
                 });
             })
-            // ->when($request->year, function ($query) use ($request) {
-            //     $query->whereYear('leave_records.created_at', $request->year);
-            // })->when($request->leave_type, function ($query) use ($request) {
-            //     $query->where('leave_configurations.code', $request->leave_type);
-            // })
+
             ->when($request->filled('year'), function ($query) use ($request) {
                 $query->whereYear('leave_records.start_date', $request->year);
             })
@@ -75,7 +72,7 @@ class LeaveRecordController extends Controller
         $validated['recorded_by'] = $request->user()->id;
 
         // OPTIMIZED: wrap both writes in transaction
-        $record = DB::transaction(function () use ($validated) {
+        $record = DB::transaction(function () use ($validated, $request) {
             $record = LeaveRecord::create($validated);
 
             // Update credit in same transaction
@@ -87,6 +84,14 @@ class LeaveRecordController extends Controller
                     'remaining_balance' => DB::raw('remaining_balance - ' . $validated['days_taken']),
                     'last_updated'      => now(),
                 ]);
+            // NEW — log the manual record entry
+            ActivityLog::create([
+                'user_id'      => $request->user()->id,
+                'action'       => 'leave_record.created',
+                'description'  => "Recorded leave for employee #{$validated['employee_id']} ({$validated['days_taken']} days)",
+                'subject_type' => 'LeaveRecord',
+                'subject_id'   => $record->id,
+            ]);
 
             return $record;
         });
@@ -143,7 +148,14 @@ class LeaveRecordController extends Controller
         // OPTIMIZED: single findOrFail + update
         $record = LeaveRecord::findOrFail($id);
         $record->update($validated);
-
+        // NEW — log the update
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'leave_record.updated',
+            'description'  => "Updated leave record #{$record->id}",
+            'subject_type' => 'LeaveRecord',
+            'subject_id'   => $record->id,
+        ]);
         return response()->json([
             'message' => 'Leave record updated successfully',
             'record'  => $record->only([
@@ -202,8 +214,6 @@ class LeaveRecordController extends Controller
             'days_taken'
         ])->findOrFail($id);
 
-        // OPTIMIZED: wrap both writes in transaction
-        // FIXED: wrong column name leave_config_id → leave_configuration_id
         DB::transaction(function () use ($record) {
             LeaveCredit::where('employee_id', $record->employee_id)
                 ->where('leave_configuration_id', $record->leave_configuration_id) // Fixed!
@@ -217,6 +227,14 @@ class LeaveRecordController extends Controller
             $record->delete();
         });
 
+        // NEW — log the deletion
+        ActivityLog::create([
+            'user_id'      => request()->user()->id,
+            'action'       => 'leave_record.deleted',
+            'description'  => "Deleted leave record #{$record->id} for employee #{$record->employee_id}",
+            'subject_type' => 'LeaveRecord',
+            'subject_id'   => $record->id,
+        ]);
         return response()->json(['message' => 'Leave record deleted successfully']);
     }
 }

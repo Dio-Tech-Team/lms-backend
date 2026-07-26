@@ -13,18 +13,12 @@ use App\Models\LeaveConfiguration;
 use App\Http\Controllers\LeaveCreditController;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\Facades\Log;
+use App\Models\ActivityLog;
 use Carbon\Carbon;
 
 
 class EmployeeController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-
-    //Vertical Partitioning applied to main query and relationship
-    // OPTIMIZED: INNER JOIN instead of LEFT JOIN (with())
-    // since every employee MUST have a user and department
     public function index(Request $request)
     {
         $query = Employee::select([
@@ -173,6 +167,15 @@ class EmployeeController extends Controller
                 'effective_date'               => $employee->date_hired,
                 'remarks'                       => 'Initial employment record',
             ]);
+
+            // NEW — log the registration
+            ActivityLog::create([
+                'user_id'      => request()->user()->id,
+                'action'       => 'employee.registered',
+                'description'  => "Registered employee {$employee->first_name} {$employee->surname}",
+                'subject_type' => 'Employee',
+                'subject_id'   => $employee->id,
+            ]);
             try {
                 $creditController = new LeaveCreditController();
                 $hireYear = Carbon::parse($employee->date_hired)->year;
@@ -319,6 +322,16 @@ class EmployeeController extends Controller
         $employee = Employee::findOrFail($id);
         $employee->update($validated);
 
+
+        // NEW — log the update
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'employee.updated',
+            'description'  => "Updated employee {$employee->first_name} {$employee->surname}",
+            'subject_type' => 'Employee',
+            'subject_id'   => $employee->id,
+        ]);
+
         return response()->json([
             'message'  => 'Employee updated successfully',
             'employee' => $employee,
@@ -350,11 +363,7 @@ class EmployeeController extends Controller
                 'all_steps'    => [],
             ];
         }
-        // $startDate   = \Carbon\Carbon::parse($latestReset->effective_date);
-        // $yearsServed = max(0, $startDate->diffInYears(now()));
-        // $currentStep = min(8, max(1, floor($yearsServed / 3) + 1));
-        // $nextStepDate = $startDate->copy()->addYears($currentStep * 3);
-        // Fallback to date_hired if there's no history row to anchor from
+
         $startDate   = $latestReset
             ? \Carbon\Carbon::parse($latestReset->effective_date)
             : \Carbon\Carbon::parse($employee->date_hired);
@@ -603,12 +612,23 @@ class EmployeeController extends Controller
         if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
+
+        $employee = Employee::find($id);
         // Single query: find and update in one go
         $affected = Employee::where('id', $id)->update(['is_active' => false]);
 
         if (!$affected) {
             return response()->json(['message' => 'Employee not found'], 404);
         }
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action'       => 'employee.deactivated',
+            'description'  => "Deactivated employee {$employee->first_name} {$employee->surname}",
+            'subject_type' => 'Employee',
+            'subject_id'   => $id,
+
+        ]);
 
         return response()->json(['message' => 'Employee deactivated successfully']);
     }

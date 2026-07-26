@@ -12,12 +12,10 @@ use App\Http\Controllers\{
     LeaveApplicationController,
     EmploymentHistoryController,
     AttendanceController,
-    UserController
+    UserController,
+    ActivityLogController
 };
 
-// 1. PUBLIC ROUTES
-// Route::post('/login', [AuthController::class, 'login']);
-// In routes/api.php
 Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
 // Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
 //     $request->fulfill();
@@ -39,27 +37,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('employees/step-increment-forecast', [EmployeeController::class, 'stepIncrementForecast']);
     Route::get('employees/{id}/leave-card', [EmployeeController::class, 'leaveCard']);
     Route::apiResource('employees', EmployeeController::class);
-    Route::apiResource('departments', DepartmentController::class);
+
+
+    // Departments (READ) - open to everyone authenticated
+    Route::get('departments', [DepartmentController::class, 'index']);
+    Route::get('departments/{id}', [DepartmentController::class, 'show']);
 
     //mobile
     Route::get('/dashboard/balances', [LeaveCreditController::class, 'getLeaveCreditBalances']);
-
-    // --- Promotion History ---
-    Route::prefix('employees/{employeeId}/promotions')->group(function () {
-        Route::get('/', [EmploymentHistoryController::class, 'index']);
-        Route::post('/', [EmploymentHistoryController::class, 'store']);
-        Route::delete('/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
-    });
-
-    // --- Leave Configurations ---
-    // Route::apiResource('leave-configurations', LeaveConfigurationController::class);
-
-    // --- Leave Credits ---
-    Route::prefix('employees/{employeeId}/leave-credits')->group(function () {
-        Route::get('/', [LeaveCreditController::class, 'index']);
-        Route::post('/initialize', [LeaveCreditController::class, 'initializeCredits']);
-        Route::put('/{creditId}', [LeaveCreditController::class, 'update']);
-    });
 
     // --- Leave Applications (General) ---
     Route::prefix('leave-applications')->group(function () {
@@ -90,6 +75,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Attendance Admin
         Route::post('attendance/upload', [AttendanceController::class, 'upload']);
+        // --- Promotion History ---
+        Route::prefix('employees/{employeeId}/promotions')->group(function () {
+            Route::get('/', [EmploymentHistoryController::class, 'index']);
+            Route::post('/', [EmploymentHistoryController::class, 'store']);
+            Route::delete('/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
+        });
+
+        Route::prefix('employees/{employeeId}/leave-credits')->group(function () {
+            Route::get('/', [LeaveCreditController::class, 'index']);
+            // Route::post('/initialize', [LeaveCreditController::class, 'initializeCredits']);
+            Route::put('/{creditId}', [LeaveCreditController::class, 'update']);
+        });
     });
 
     // 4. SUPER ADMIN ONLY ROUTES
@@ -100,5 +97,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('leave-configurations', [LeaveConfigurationController::class, 'store']);
         Route::put('leave-configurations/{id}', [LeaveConfigurationController::class, 'update']);
         Route::delete('leave-configurations/{id}', [LeaveConfigurationController::class, 'destroy']);
+
+        // NEW — Departments (WRITE)
+        Route::post('departments', [DepartmentController::class, 'store']);
+        Route::put('departments/{id}', [DepartmentController::class, 'update']);
+        Route::delete('departments/{id}', [DepartmentController::class, 'destroy']);
+
+        // NEW — Activity Logs
+        Route::get('activity-logs', [ActivityLogController::class, 'index']);
     });
 });

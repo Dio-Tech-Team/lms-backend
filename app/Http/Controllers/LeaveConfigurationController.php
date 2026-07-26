@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
+
 use Illuminate\Http\Request;
 use App\Models\LeaveConfiguration;
 
@@ -40,8 +42,16 @@ class LeaveConfigurationController extends Controller
             'credit_type'    => 'nullable|in:fixed,monthly',
             'description'    => 'nullable|string',
         ]);
-        $validated['application_to'] = implode(',', $request->application_to);
+        // $validated['application_to'] = implode(',', $request->application_to);
         $config = LeaveConfiguration::create($validated);
+        // NEW — log the creation
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'leave_configuration.created',
+            'description'  => "Created leave configuration {$config->name} ({$config->code})",
+            'subject_type' => 'LeaveConfiguration',
+            'subject_id'   => $config->id,
+        ]);
 
         return response()->json([
             'message' => 'Leave configuration created successfully',
@@ -94,13 +104,21 @@ class LeaveConfigurationController extends Controller
             'credit_type'    => 'nullable|in:fixed,monthly',
             'description'    => 'nullable|string',
         ]);
-        if ($request->has('application_to')) {
-            $validated['application_to'] = implode(',', $request->application_to);
-        }
+        // if ($request->has('application_to')) {
+        //     $validated['application_to'] = implode(',', $request->application_to);
+        // }
 
         $config = LeaveConfiguration::findOrFail($id);
         $config->update($validated);
 
+        // NEW — log the update
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'leave_configuration.updated',
+            'description'  => "Updated leave configuration {$config->name} ({$config->code})",
+            'subject_type' => 'LeaveConfiguration',
+            'subject_id'   => $config->id,
+        ]);
         return response()->json([
             'message' => 'Leave configuration updated successfully',
             'data'    => $config->only([
@@ -120,12 +138,22 @@ class LeaveConfigurationController extends Controller
 
     public function destroy(string $id)
     {
+        $config = LeaveConfiguration::find($id);
         // OPTIMIZED: single query instead of findOrFail + delete
         $affected = LeaveConfiguration::where('id', $id)->delete();
 
         if (!$affected) {
             return response()->json(['message' => 'Leave configuration not found'], 404);
         }
+        // NEW — log the deletion
+        ActivityLog::create([
+            'user_id'      => request()->user()->id,
+            'action'       => 'leave_configuration.deleted',
+            'description'  => "Deleted leave configuration {$config->name} ({$config->code})",
+            'subject_type' => 'LeaveConfiguration',
+            'subject_id'   => $id,
+        ]);
+
 
         return response()->json(['message' => 'Leave configuration deleted successfully']);
     }

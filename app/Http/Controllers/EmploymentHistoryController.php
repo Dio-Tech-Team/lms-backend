@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\EmploymentHistory;
 use App\Models\Employee;
+use App\Models\ActivityLog;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\LeaveCreditController;
+
 class EmploymentHistoryController extends Controller
 {
     /**
@@ -44,7 +46,7 @@ class EmploymentHistoryController extends Controller
             'remarks'                    => 'nullable|string',
         ]);
 
-        $promotion = DB::transaction(function () use ($request, $employeeId) {
+        $promotion = DB::transaction(function () use ($request, $employeeId, $employee) {
             // Single query: find and update employee position/status
             Employee::where('id', $employeeId)->update([
                 'position'          => $request->new_position,
@@ -53,7 +55,8 @@ class EmploymentHistoryController extends Controller
             $leaveController = new LeaveCreditController();
             $leaveController->initializeSingleEmployeeCredits($employeeId);
             // Create the history record
-            return EmploymentHistory::create([
+
+            $history = EmploymentHistory::create([
                 'employee_id'                => $employeeId,
                 'previous_position'          => $request->previous_position,
                 'new_position'               => $request->new_position,
@@ -62,7 +65,18 @@ class EmploymentHistoryController extends Controller
                 'effective_date'             => $request->effective_date,
                 'remarks'                    => $request->remarks,
             ]);
+            // NEW — log the change
+            ActivityLog::create([
+                'user_id'      => request()->user()->id,
+                'action'       => 'employment_history.recorded',
+                'description'  => "Recorded position change for {$employee->first_name} {$employee->surname}: {$request->new_position}",
+                'subject_type' => 'Employee',
+                'subject_id'   => $employeeId,
+            ]);
+
+            return $history;
         });
+
 
         return response()->json([
             'message'  => 'Employment history recorded successfully',
@@ -79,34 +93,6 @@ class EmploymentHistoryController extends Controller
         ], 201);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    // public function show(string $id) {}
-
-    // /**
-    //  * Update the specified resource in storage.
-    //  */
-    // public function update(Request $request, string $id)
-    // {
-    //     //
-    // }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    // public function destroy($employeeId, $promotionId)
-    // {
-    //     $promotion = EmploymentHistory::where('employee_id', $employeeId)
-    //         ->where('id', $promotionId)
-    //         ->firstOrFail();
-
-    //     $promotion->delete();
-
-    //     return response()->json([
-    //         'message' => 'Promotion history deleted successfully'
-    //     ]);
-    // }
     public function destroy($employeeId, $promotionId)
     {
         // OPTIMIZED: single query instead of firstOrFail + delete
@@ -118,6 +104,14 @@ class EmploymentHistoryController extends Controller
             return response()->json(['message' => 'Record not found'], 404);
         }
 
+        // NEW — log the deletion
+        ActivityLog::create([
+            'user_id'      => request()->user()->id,
+            'action'       => 'employment_history.deleted',
+            'description'  => "Deleted employment history record #{$promotionId} for employee #{$employeeId}",
+            'subject_type' => 'Employee',
+            'subject_id'   => $employeeId,
+        ]);
         return response()->json(['message' => 'Employment history deleted successfully']);
     }
 }

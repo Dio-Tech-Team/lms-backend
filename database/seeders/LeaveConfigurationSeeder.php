@@ -17,18 +17,18 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name' => 'Vacation Leave',
                 'code' => 'VL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => true,
                 'can_monetize' => true,
                 'fixed_days' => null,
                 'monthly_credit' => 1.25,
                 'credit_type' => 'monthly',
-                'description' => 'Leave for personal vacation and rest purposes'
+                'description' => 'Leave for personal vacation and rest purpose'
             ],
             [
                 'name'           => 'Sick Leave',
                 'code'           => 'SL',
-                'application_to'  => 'all',
+                'application_to'  => ['all'],
                 'can_carry_over' => true,
                 'can_monetize'   => false,
                 'fixed_days'     => null,
@@ -39,7 +39,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Wellness Leave',
                 'code'           => 'WL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 5,
@@ -50,7 +50,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Mandatory/Forced Leave',
                 'code'           => 'FL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 0,
@@ -61,7 +61,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Maternity Leave',
                 'code'           => 'ML',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 105,
@@ -72,7 +72,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Paternity Leave',
                 'code'           => 'PTL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 7,
@@ -83,7 +83,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Special Privilege Leave',
                 'code'           => 'SPL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 3,
@@ -94,7 +94,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Solo Parent Leave',
                 'code'           => 'SOL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 7,
@@ -105,7 +105,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Study Leave',
                 'code'           => 'STL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 180,
@@ -116,7 +116,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'VAWC Leave',
                 'code'           => 'VAWC',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 10,
@@ -127,7 +127,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Rehabilitation Leave',
                 'code'           => 'RHL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 180,
@@ -138,7 +138,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Special Leave Benefits for Women',
                 'code'           => 'SLB',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 60,
@@ -149,7 +149,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Special Emergency (Calamity) Leave',
                 'code'           => 'CAL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => 5,
@@ -160,7 +160,7 @@ class LeaveConfigurationSeeder extends Seeder
             [
                 'name'           => 'Adoption Leave',
                 'code'           => 'ADL',
-                'application_to' => 'all',
+                'application_to' => ['all'],
                 'can_carry_over' => false,
                 'can_monetize'   => false,
                 'fixed_days'     => null,

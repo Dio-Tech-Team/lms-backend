@@ -11,6 +11,7 @@ use App\Models\LeaveRecord;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
+use App\Models\ActivityLog;
 
 class LeaveApplicationController extends Controller
 {
@@ -93,11 +94,6 @@ class LeaveApplicationController extends Controller
             ], 403);
         }
 
-        // if (($request->filled('employee_id') || $request->boolean('is_paper_submission'))
-        //     && (!$request->user() || $request->user()->role !== 'hr_admin')
-        // ) {
-        //     return response()->json(['message' => 'Forbidden'], 403);
-        // }
         if (($request->filled('employee_id') || $request->boolean('is_paper_submission'))
             && !$this->isAdmin($request->user())
         ) {
@@ -236,11 +232,6 @@ class LeaveApplicationController extends Controller
 
         // If it's Force Leave, we need the VL credit record, not the FL record.
         $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
-
-        // $credit = LeaveCredit::where('employee_id', $application->employee_id)
-        //     ->where('leave_configuration_id', $application->leave_configuration_id)
-        //     ->where('year', now()->year)
-        //     ->first();
         $credit = LeaveCredit::where('employee_id', $application->employee_id)
             ->whereHas('leaveConfiguration', function ($query) use ($targetCode) {
                 $query->where('code', $targetCode);
@@ -249,12 +240,6 @@ class LeaveApplicationController extends Controller
             // ->lockForUpdate() prevent double approve if 2 or more admin approved
             ->first();
 
-        // 1. STRICT VALIDATION: Block if Wellness or SPL balance is insufficient
-        // if (in_array($config->code, ['WL', 'SPL', 'FL'])) {
-        //     if (!$credit || $credit->remaining_balance < $application->days_applied) {
-        //         return response()->json(['message' => 'Insufficient balance for ' . $config->name], 422);
-        //     }
-        // }
         // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
         if (in_array($config->code, ['WL', 'SPL', 'FL'])) {
             if (!$credit || $credit->remaining_balance < $application->days_applied) {
@@ -291,6 +276,15 @@ class LeaveApplicationController extends Controller
                 'days_taken'             => $application->days_applied,
                 'remarks'                => 'Approved. ' . ($isNoPay ? 'Status: No Pay' : 'Balance deducted.'),
             ]);
+
+            // NEW — log the approval
+            ActivityLog::create([
+                'user_id'      => $request->user()->id,
+                'action'       => 'leave_application.approved',
+                'description'  => "Approved leave application #{$application->id} ({$config->name})",
+                'subject_type' => 'LeaveApplication',
+                'subject_id'   => $application->id,
+            ]);
         });
 
         return response()->json(['message' => 'Leave application approved successfully']);
@@ -323,6 +317,13 @@ class LeaveApplicationController extends Controller
             'status'      => 'cancelled',
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
+        ]);
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'leave_application.cancelled',
+            'description'  => "Cancelled leave application #{$application->id}",
+            'subject_type' => 'LeaveApplication',
+            'subject_id'   => $application->id,
         ]);
 
         return response()->json(['message' => 'Leave application cancelled successfully']);
@@ -376,12 +377,6 @@ class LeaveApplicationController extends Controller
         ])->findOrFail($id);
 
         $user = $request->user();
-
-        // if ($user->role !== 'hr_admin' && $application->employee_id !== $user->employee?->id) {
-        //     return response()->json([
-        //         'message' => 'Unauthorized: You can only generate PDF forms for your own leave applications.'
-        //     ], 403);
-        // }
 
         if (!$this->isAdmin($user) && $application->employee_id !== $user->employee?->id) {
             return response()->json([

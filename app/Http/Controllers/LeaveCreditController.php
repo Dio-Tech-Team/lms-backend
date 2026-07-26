@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\LeaveCredit;
 use App\Models\Employee;
 use App\Models\LeaveConfiguration;
+use App\Models\ActivityLog;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -158,9 +159,6 @@ class LeaveCreditController extends Controller
                     return $config->code === 'WL';
                 }
 
-                // 2. FLEXIBLE STATUS CHECK:
-                // Because of the 'array' cast in your Model, 
-                // $config->application_to is already a PHP array.
                 return in_array('all', $config->application_to) ||
                     in_array($employee->employment_status, $config->application_to);
             });
@@ -205,6 +203,13 @@ class LeaveCreditController extends Controller
                 LeaveCredit::insert($chunk);
             }
         }
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'leave_credits.initialized_all',
+            'description'  => "Initialized leave credits for all active employees — year {$targetYear} (" . count($creditsToInsert) . " records created)",
+            'subject_type' => 'LeaveCredit',
+            'subject_id'   => null,
+        ]);
 
         return response()->json([
             'message' => "Successfully initialized all leave credits for the year {$targetYear}!",
@@ -230,6 +235,13 @@ class LeaveCreditController extends Controller
         $validated['last_updated'] = now();
 
         $credit->update($validated);
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'leave_credit.updated',
+            'description'  => "Manually adjusted leave credit #{$creditId} for employee #{$employeeId}",
+            'subject_type' => 'LeaveCredit',
+            'subject_id'   => $credit->id,
+        ]);
 
         return response()->json([
             'message' => 'Leave credit updated successfully',

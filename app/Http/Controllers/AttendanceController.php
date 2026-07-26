@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Attendance;
 use App\Models\LeaveCredit;
 use App\Models\LeaveConfiguration;
+use App\Models\ActivityLog;
 use App\Service\LeaveCreditComputationService;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\DB;
@@ -147,7 +148,15 @@ class AttendanceController extends Controller
                 'skipped' => [],
             ], 500);
         }
-
+        // NEW — log the upload as one summary entry, not per-employee
+        $monthName = Carbon::create($year, $month, 1)->format('F');
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'attendance.uploaded',
+            'description'  => "Uploaded attendance for {$monthName} {$year} — " . count($results) . " processed, " . count($errors) . " errors, " . count($skipped) . " skipped",
+            'subject_type' => 'Attendance',
+            'subject_id'   => null, // no single record — this action affects many
+        ]);
         return response()->json([
             'message' => 'Attendance processed successfully',
             'results' => $results,

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Department;
-
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 
 class DepartmentController extends Controller
@@ -40,6 +40,14 @@ class DepartmentController extends Controller
             'is_active' => $request->is_active ?? true
 
 
+        ]);
+
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'department.created',
+            'description'  => "Created department {$department->name}",
+            'subject_type' => 'Department',
+            'subject_id'   => $department->id,
         ]);
 
         return response()->json([
@@ -79,6 +87,14 @@ class DepartmentController extends Controller
         $department = Department::findOrFail($id);
         $department->update($validated);
 
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'department.updated',
+            'description'  => "Updated department {$department->name}",
+            'subject_type' => 'Department',
+            'subject_id'   => $department->id,
+        ]);
+
 
         return response()->json([
             'message' => 'Department updated successfully',
@@ -94,9 +110,16 @@ class DepartmentController extends Controller
         $department = Department::findOrFail($id);
         $department->update(['is_active' => false]);
 
+        ActivityLog::create([
+            'user_id'      => request()->user()->id,
+            'action'       => 'department.deactivated',
+            'description'  => "Deactivated department {$department->name}",
+            'subject_type' => 'Department',
+            'subject_id'   => $department->id,
+        ]);
+
         return response()->json([
             'message' => 'Department deactivated successfully'
         ], 200);
-       
     }
 }
