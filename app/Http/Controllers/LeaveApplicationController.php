@@ -86,14 +86,11 @@ class LeaveApplicationController extends Controller
         $user = $request->user();
         $config = LeaveConfiguration::findOrFail($request->leave_configuration_id);
 
-        // THE SAFETY GATE
-        // If the user is a Job Order, block them unless the leave code is 'WL' (Wellness)
-        if ($user->status === 'job_order' && $config->code !== 'WL') {
+        if (!$config->is_active) {
             return response()->json([
-                'message' => 'Unauthorized: Job Order personnel are only eligible for Wellness Leave.'
-            ], 403);
+                'message' => 'This leave type is no longer active and cannot be used for new applications.'
+            ], 422);
         }
-
         if (($request->filled('employee_id') || $request->boolean('is_paper_submission'))
             && !$this->isAdmin($request->user())
         ) {
@@ -112,6 +109,12 @@ class LeaveApplicationController extends Controller
             ], 422);
         }
 
+        if ($employee->employment_status === 'job_order' && $config->code !== 'WL') {
+            return response()->json([
+                'message' => 'Unauthorized: Job Order personnel are only eligible for Wellness Leave.'
+            ], 403);
+        }
+
         // Only block duplicates if it's NOT a paper submission
         if (!$request->boolean('is_paper_submission')) {
             $existing = LeaveApplication::where('employee_id', $employee->id)
@@ -126,8 +129,8 @@ class LeaveApplicationController extends Controller
         }
 
         // Fetch leave config
-        $config = LeaveConfiguration::select(['id', 'code', 'name'])
-            ->findOrFail($validated['leave_configuration_id']);
+        // $config = LeaveConfiguration::select(['id', 'code', 'name'])
+        //     ->findOrFail($validated['leave_configuration_id']);
 
         // 1. Calculate the year from the start date
         $year = Carbon::parse($validated['start_date'])->year;
@@ -159,6 +162,20 @@ class LeaveApplicationController extends Controller
                 ], 422);
             }
         }
+        if ($config->code === 'FL') {
+            $vlCredit = LeaveCredit::whereHas('leaveConfiguration', function ($query) {
+                $query->where('code', 'VL');
+            })
+                ->where('employee_id', $employee->id)
+                ->where('year', $year)
+                ->first();
+
+            if (!$vlCredit || $vlCredit->remaining_balance < $validated['days_applied']) {
+                return response()->json([
+                    'message' => 'Insufficient Vacation Leave balance to cover this Forced Leave application.'
+                ], 422);
+            }
+        }
 
         if ($config->code === 'WL' && $validated['days_applied'] > 3) {
             return response()->json([
@@ -180,6 +197,7 @@ class LeaveApplicationController extends Controller
                     'applied_at'             => $request->input('applied_at', now()),
                     'reviewed_at'            => now(),
                     'reviewed_by'            => $request->user()->id,
+                    'filed_by'               => $request->user()->id,
                 ]);
 
                 LeaveRecord::create([
@@ -289,14 +307,41 @@ class LeaveApplicationController extends Controller
 
         return response()->json(['message' => 'Leave application approved successfully']);
     }
+
+    public function reject(Request $request, $id)
+    {
+        $application = LeaveApplication::findOrFail($id);
+
+        if ($application->status !== 'pending') {
+            return response()->json([
+                'message' => 'Application is already ' . $application->status,
+            ], 400);
+        }
+
+        $application->update([
+            'status'      => 'rejected',
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+        ]);
+
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'leave_application.rejected',
+            'description'  => "Rejected leave application #{$application->id}",
+            'subject_type' => 'LeaveApplication',
+            'subject_id'   => $application->id,
+        ]);
+
+        return response()->json(['message' => 'Leave application rejected successfully']);
+    }
     // Add this method to your LeaveApplicationController
     private function validateLeaveEligibility($config, $employee)
     {
-        if ($config->code === 'PTL' && $employee->gender !== 'male') {
+        if ($config->code === 'PTL' && $employee->sex !== 'male') {
             return 'Paternity leave is only available for male employees.';
         }
 
-        if ($config->code === 'ML' && $employee->gender !== 'female') {
+        if ($config->code === 'ML' && $employee->sex !== 'female') {
             return 'Maternity leave is only available for female employees.';
         }
 

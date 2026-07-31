@@ -17,10 +17,11 @@ return new class extends Migration
             $table->foreignId('leave_configuration_id')->constrained('leave_configurations')->onDelete('cascade');
             $table->date('start_date');
             $table->date('end_date');
-            $table->decimal('days_applied', 8, 2);
+            $table->decimal('days_applied', 8, 3);
             $table->text('reason')->nullable();
-            $table->enum('status', ['pending', 'approved', 'cancelled'])->default('pending');
+            $table->enum('status', ['pending', 'approved', 'cancelled', 'rejected'])->default('pending');
             $table->index('status');
+            $table->foreignId('filed_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('applied_at')->nullable();
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('reviewed_at')->nullable();

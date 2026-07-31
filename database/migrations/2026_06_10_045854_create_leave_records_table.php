@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignId('recorded_by')->constrained('users')->onDelete('cascade');
             $table->date('start_date');
             $table->date('end_date');
-            $table->decimal('days_taken', 8, 2);
+            $table->decimal('days_taken', 8, 3);
             $table->text('remarks')->nullable();
             $table->timestamps();
         });

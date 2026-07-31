@@ -22,6 +22,8 @@ return new class extends Migration
             $table->index('year');
             $table->timestamp('last_updated')->nullable();
             $table->timestamps();
+
+            $table->unique(['employee_id', 'leave_configuration_id', 'year']);
         });
     }
 

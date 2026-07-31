@@ -64,6 +64,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:super_admin,hr_admin')->group(function () {
         // Leave Application Admin Actions
         Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
+        Route::post('leave-applications/{id}/reject', [LeaveApplicationController::class, 'reject']);
         Route::post('leave-applications/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
 
         // Leave Records (HR Management)
@@ -97,6 +98,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('leave-configurations', [LeaveConfigurationController::class, 'store']);
         Route::put('leave-configurations/{id}', [LeaveConfigurationController::class, 'update']);
         Route::delete('leave-configurations/{id}', [LeaveConfigurationController::class, 'destroy']);
+        Route::post('leave-configurations/{id}/reactivate', [LeaveConfigurationController::class, 'reactivate']);
 
         // NEW — Departments (WRITE)
         Route::post('departments', [DepartmentController::class, 'store']);

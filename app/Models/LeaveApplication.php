@@ -17,6 +17,7 @@ class LeaveApplication extends Model
         'days_applied',
         'reason',
         'status',
+        'filed_by',
         'applied_at',
         'reviewed_by',
         'reviewed_at',
@@ -28,7 +29,7 @@ class LeaveApplication extends Model
         'end_date'    => 'date',
         'applied_at'  => 'datetime',
         'reviewed_at' => 'datetime',
-        'days_applied' => 'decimal:2',
+        'days_applied' => 'decimal:3',
     ];
 
     public function employee()
@@ -44,5 +45,9 @@ class LeaveApplication extends Model
     public function reviewedBy()
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+    public function filedBy()
+    {
+        return $this->belongsTo(User::class, 'filed_by');
     }
 }

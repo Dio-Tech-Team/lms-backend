@@ -7,6 +7,7 @@ use App\Models\LeaveRecord;
 use App\Models\LeaveCredit;
 use App\Models\Employee;
 use App\Models\ActivityLog;
+use App\Models\LeaveConfiguration;
 use Illuminate\Support\Facades\DB;
 
 class LeaveRecordController extends Controller
@@ -70,6 +71,14 @@ class LeaveRecordController extends Controller
         ]);
 
         $validated['recorded_by'] = $request->user()->id;
+        // ADD THIS BLOCK:
+        $config = LeaveConfiguration::find($validated['leave_configuration_id']);
+        if (!$config->is_active) {
+            return response()->json([
+                'message' => 'This leave type is no longer active and cannot be used for new records.'
+            ], 422);
+        }
+
 
         // OPTIMIZED: wrap both writes in transaction
         $record = DB::transaction(function () use ($validated, $request) {

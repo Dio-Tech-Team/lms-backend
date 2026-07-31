@@ -47,7 +47,9 @@ class LeaveCreditController extends Controller
         $previousYear = $targetYear - 1;
 
         $employee = Employee::findOrFail($employeeId);
-        $configs = LeaveConfiguration::all();
+        // $configs = LeaveConfiguration::all();
+        // To this:
+        $configs = LeaveConfiguration::where('is_active', true)->get();
         $now = now()->toDateTimeString(); // FIXED: Safe string for raw batch inserts
 
         $creditsToInsert = [];
@@ -124,7 +126,9 @@ class LeaveCreditController extends Controller
         $previousYear = $targetYear - 1;
 
         $employees = Employee::where('is_active', true)->get();
-        $configs = LeaveConfiguration::all();
+        // $configs = LeaveConfiguration::all();
+        // To this:
+        $configs = LeaveConfiguration::where('is_active', true)->get();
         $now = now()->toDateTimeString(); // FIXED: Safe string for raw batch inserts
 
         // OPTIMIZED: Chunk fetch existing credits for the target year to check duplicates in-memory

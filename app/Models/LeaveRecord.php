@@ -21,7 +21,7 @@ class LeaveRecord extends Model
     protected $casts = [
         'start_date' => 'date',
         'end_date'   => 'date',
-        'days_taken' => 'decimal:2',
+        'days_taken' => 'decimal:3',
     ];
 
     public function employee()

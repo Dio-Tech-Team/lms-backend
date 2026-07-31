@@ -15,7 +15,8 @@ class LeaveConfiguration extends Model
         'fixed_days',
         'monthly_credit',
         'credit_type',
-        'description'
+        'description',
+        'is_active',
     ];
 
     protected $casts = [
@@ -24,6 +25,7 @@ class LeaveConfiguration extends Model
         'can_monetize' => 'boolean',
         'fixed_days' => 'decimal:2',
         'monthly_credit' => 'decimal:2',
+        'is_active' => 'boolean'
     ];
 
     // public function leaves(){

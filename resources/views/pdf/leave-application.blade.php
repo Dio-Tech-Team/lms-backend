@@ -140,7 +140,7 @@
                 <span class="checkbox {{ $code === 'ML' ? 'checked' : '' }}">{{ $code === 'ML' ? 'X' : '' }}</span>
                 Maternity Leave <span class="small-text">(R.A. No. 11210)</span><br><br>
 
-                <span class="checkbox {{ $code === 'PL' ? 'checked' : '' }}">{{ $code === 'PL' ? 'X' : '' }}</span>
+                <span class="checkbox {{ $code === 'PTL' ? 'checked' : '' }}">{{ $code === 'PTL' ? 'X' : '' }}</span>
                 Paternity Leave <span class="small-text">(R.A. No. 8187)</span><br><br>
 
                 <span class="checkbox {{ $code === 'SPL' ? 'checked' : '' }}">{{ $code === 'SPL' ? 'X' : '' }}</span>
@@ -169,7 +169,7 @@
                 Adoption Leave <span class="small-text">(R.A. No. 8552)</span><br><br>
 
                 <strong>Others:</strong>
-                {{ !in_array($code, ['VL', 'FL', 'SL', 'ML', 'PL', 'SPL', 'SOLO', 'STL', 'VAWC', 'REHAB', 'SLB', 'CAL', 'ADOP']) ? $application->leaveConfiguration->name : '_______________________' }}
+                {{ !in_array($code, ['VL', 'FL', 'SL', 'ML', 'PTL', 'SPL', 'SOLO', 'STL', 'VAWC', 'REHAB', 'SLB', 'CAL', 'ADOP']) ? $application->leaveConfiguration->name : '_______________________' }}
             </td>
             <td style="width:50%;">
                 <strong>6.B DETAILS OF LEAVE</strong><br><br>
@@ -252,7 +252,7 @@
                     class="checkbox {{ $application->status === 'approved' ? 'checked' : '' }}">{{ $application->status === 'approved' ? 'X' : '' }}</span>
                 For approval<br>
                 <span
-                    class="checkbox {{ $application->status === 'cancelled' ? 'checked' : '' }}">{{ $application->status === 'cancelled' ? 'X' : '' }}</span>
+                    class="checkbox {{ $application->status === 'rejected' ? 'checked' : '' }}">{{ $application->status === 'rejected' ? 'X' : '' }}</span>
                 For disapproval due to ___________<br><br><br><br>
                 <div class="center underline">&nbsp;</div>
                 <div class="center small-text">(Authorized Officer)</div>

@@ -9,7 +9,7 @@ use App\Models\LeaveConfiguration;
 
 class LeaveConfigurationController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         // Vertical partitioning - no SELECT *
         $configs = LeaveConfiguration::select([
@@ -23,7 +23,12 @@ class LeaveConfigurationController extends Controller
             'monthly_credit',
             'credit_type',
             'description',
-        ])->get();
+            'is_active'
+        ])
+            ->when($request->boolean('active_only'), function ($query) {
+                $query->where('is_active', true);
+            })
+            ->get();
 
         return response()->json($configs);
     }
@@ -84,6 +89,7 @@ class LeaveConfigurationController extends Controller
             'monthly_credit',
             'credit_type',
             'description',
+            'is_active',
         ])->findOrFail($id);
 
         return response()->json($config);
@@ -136,25 +142,67 @@ class LeaveConfigurationController extends Controller
         ]);
     }
 
+    // public function destroy(string $id)
+    // {
+    //     $config = LeaveConfiguration::find($id);
+    //     // OPTIMIZED: single query instead of findOrFail + delete
+    //     $affected = LeaveConfiguration::where('id', $id)->delete();
+
+    //     if (!$affected) {
+    //         return response()->json(['message' => 'Leave configuration not found'], 404);
+    //     }
+    //     // NEW — log the deletion
+    //     ActivityLog::create([
+    //         'user_id'      => request()->user()->id,
+    //         'action'       => 'leave_configuration.deleted',
+    //         'description'  => "Deleted leave configuration {$config->name} ({$config->code})",
+    //         'subject_type' => 'LeaveConfiguration',
+    //         'subject_id'   => $id,
+    //     ]);
+
+
+    //     return response()->json(['message' => 'Leave configuration deleted successfully']);
+    // }
+
     public function destroy(string $id)
     {
         $config = LeaveConfiguration::find($id);
-        // OPTIMIZED: single query instead of findOrFail + delete
-        $affected = LeaveConfiguration::where('id', $id)->delete();
 
-        if (!$affected) {
+        if (!$config) {
             return response()->json(['message' => 'Leave configuration not found'], 404);
         }
-        // NEW — log the deletion
+
+        $config->update(['is_active' => false]);
+
         ActivityLog::create([
             'user_id'      => request()->user()->id,
-            'action'       => 'leave_configuration.deleted',
-            'description'  => "Deleted leave configuration {$config->name} ({$config->code})",
+            'action'       => 'leave_configuration.deactivated',
+            'description'  => "Deactivated leave configuration {$config->name} ({$config->code})",
             'subject_type' => 'LeaveConfiguration',
-            'subject_id'   => $id,
+            'subject_id'   => $config->id,
         ]);
 
+        return response()->json(['message' => 'Leave configuration deactivated successfully']);
+    }
 
-        return response()->json(['message' => 'Leave configuration deleted successfully']);
+    public function reactivate(string $id)
+    {
+        $config = LeaveConfiguration::find($id);
+
+        if (!$config) {
+            return response()->json(['message' => 'Leave configuration not found'], 404);
+        }
+
+        $config->update(['is_active' => true]);
+
+        ActivityLog::create([
+            'user_id'      => request()->user()->id,
+            'action'       => 'leave_configuration.reactivated',
+            'description'  => "Reactivated leave configuration {$config->name} ({$config->code})",
+            'subject_type' => 'LeaveConfiguration',
+            'subject_id'   => $config->id,
+        ]);
+
+        return response()->json(['message' => 'Leave configuration reactivated successfully']);
     }
 }
