@@ -255,7 +255,7 @@ class LeaveApplicationController extends Controller
                 $query->where('code', $targetCode);
             })
             ->where('year', now()->year)
-            // ->lockForUpdate() prevent double approve if 2 or more admin approved
+            ->lockForUpdate()
             ->first();
 
         // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient

@@ -112,23 +112,23 @@ class LeaveCreditComputationService
     //             'tardiness_equivalent_days' => $tardinessEquivalentDays,
     //         ];
     //     }
-    public function getTotalWorkingDays(int $month, int $year): int
-    {
-        $startDate = Carbon::create($year, $month, 1);
-        $endDate = $startDate->copy()->endOfMonth();
+    // public function getTotalWorkingDays(int $month, int $year): int
+    // {
+    //     $startDate = Carbon::create($year, $month, 1);
+    //     $endDate = $startDate->copy()->endOfMonth();
 
-        $workingDays = 0;
-        $current = $startDate->copy();
+    //     $workingDays = 0;
+    //     $current = $startDate->copy();
 
-        while ($current->lte($endDate)) {
-            if (!$current->isWeekend()) {
-                $workingDays++;
-            }
-            $current->addDay();
-        }
+    //     while ($current->lte($endDate)) {
+    //         if (!$current->isWeekend()) {
+    //             $workingDays++;
+    //         }
+    //         $current->addDay();
+    //     }
 
-        return $workingDays;
-    }
+    //     return $workingDays;
+    // }
 
     /**
      * Convert minutes to equivalent day decimal (CSC Table IV).

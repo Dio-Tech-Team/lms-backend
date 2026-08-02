@@ -177,9 +177,9 @@ class LeaveCreditController extends Controller
 
                     if ($config->credit_type === 'fixed') {
                         $startingCredits = $config->fixed_days ?? 0;
-                        // SPECIAL OVERRIDE: If it's Wellness for a JO, force the 3 days
+                        // SPECIAL OVERRIDE: If it's Wellness for a JO, force the 5 days
                         if ($config->code === 'WL' && $employee->employment_status === 'job_order') {
-                            $startingCredits = 3;
+                            $startingCredits = 5;
                         }
                     } else if ($config->can_carry_over) {
                         // Retrieve carry over balance in-memory

@@ -28,16 +28,17 @@ Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login
 // })->middleware(['signed'])->name('verification.verify'); // <-- Removed 'auth:sanctum'
 
 // 2. AUTHENTICATED ROUTES
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
     // --- Employee & Department Management ---
+    // Open to all authenticated users — ownership/role filtering handled inside the controller
     Route::get('employees/stats', [EmployeeController::class, 'stats']);
     Route::get('employees/step-increment-forecast', [EmployeeController::class, 'stepIncrementForecast']);
     Route::get('employees/{id}/leave-card', [EmployeeController::class, 'leaveCard']);
-    Route::apiResource('employees', EmployeeController::class);
-
+    Route::get('employees', [EmployeeController::class, 'index']);
+    Route::get('employees/{id}', [EmployeeController::class, 'show']);
 
     // Departments (READ) - open to everyone authenticated
     Route::get('departments', [DepartmentController::class, 'index']);
@@ -62,6 +63,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 3. HR ADMIN ONLY ROUTES (Using your new Middleware)
     Route::middleware('role:super_admin,hr_admin')->group(function () {
+
+        Route::put('employees/{id}', [EmployeeController::class, 'update']);
+        Route::patch('employees/{id}', [EmployeeController::class, 'update']);
+        Route::delete('employees/{id}', [EmployeeController::class, 'destroy']);
+
+        Route::post('employees/{id}/resign', [EmployeeController::class, 'resign']);
+        Route::post('employees/{id}/rehire', [EmployeeController::class, 'rehire']);
         // Leave Application Admin Actions
         Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
         Route::post('leave-applications/{id}/reject', [LeaveApplicationController::class, 'reject']);
@@ -94,6 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:super_admin')->group(function () {
         // Account Management
         Route::apiResource('users', UserController::class)->only(['index', 'store', 'destroy']);
+        Route::post('employees', [EmployeeController::class, 'store']);
 
         Route::post('leave-configurations', [LeaveConfigurationController::class, 'store']);
         Route::put('leave-configurations/{id}', [LeaveConfigurationController::class, 'update']);

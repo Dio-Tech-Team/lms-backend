@@ -164,33 +164,74 @@ class AttendanceController extends Controller
             'skipped' => $skipped,
         ]);
     }
-    private function findEmployeeByName(string $name)
+    // private function findEmployeeByName(string $name)
+    // {
+    //     $parts = explode(',', $name);
+    //     if (count($parts) < 2) return null;
+
+    //     $surname = trim($parts[0]);
+    //     $firstPart = trim($parts[1]);
+
+    //     // remove dot (C.)
+    //     $firstPart = str_replace('.', '', $firstPart);
+
+    //     $pieces = array_filter(explode(' ', $firstPart)); // remove empty entries
+    //     $pieces = array_values($pieces); // reindex
+
+    //     if (count($pieces) === 0) return null;
+
+    //     // Last piece = middle initial, everything before = first name
+    //     $middleInitial = trim(end($pieces));
+    //     $firstNamePieces = array_slice($pieces, 0, -1);
+    //     $firstName = implode(' ', $firstNamePieces);
+
+    //     return Employee::whereRaw('LOWER(surname) = ?', [strtolower($surname)])
+    //         ->whereRaw('LOWER(first_name) = ?', [strtolower($firstName)])
+    //         ->when($middleInitial, function ($q) use ($middleInitial) {
+    //             $q->whereRaw('LEFT(LOWER(middle_name), 1) = ?', [strtolower($middleInitial)]);
+    //         })
+    //         ->first();
+    // }
+
+    private function findEmployeeByName(string $name): ?Employee
     {
         $parts = explode(',', $name);
         if (count($parts) < 2) return null;
 
         $surname = trim($parts[0]);
         $firstPart = trim($parts[1]);
-
-        // remove dot (C.)
         $firstPart = str_replace('.', '', $firstPart);
 
-        $pieces = array_filter(explode(' ', $firstPart)); // remove empty entries
-        $pieces = array_values($pieces); // reindex
-
+        $pieces = array_values(array_filter(explode(' ', $firstPart)));
         if (count($pieces) === 0) return null;
 
-        // Last piece = middle initial, everything before = first name
-        $middleInitial = trim(end($pieces));
-        $firstNamePieces = array_slice($pieces, 0, -1);
+        $middleInitial = count($pieces) > 1 ? trim(end($pieces)) : null;
+        $firstNamePieces = count($pieces) > 1 ? array_slice($pieces, 0, -1) : $pieces;
         $firstName = implode(' ', $firstNamePieces);
 
-        return Employee::whereRaw('LOWER(surname) = ?', [strtolower($surname)])
+        // Base match: surname + first name only
+        $candidates = Employee::whereRaw('LOWER(surname) = ?', [strtolower($surname)])
             ->whereRaw('LOWER(first_name) = ?', [strtolower($firstName)])
-            ->when($middleInitial, function ($q) use ($middleInitial) {
-                $q->whereRaw('LEFT(LOWER(middle_name), 1) = ?', [strtolower($middleInitial)]);
-            })
-            ->first();
+            ->get();
+
+        if ($candidates->count() === 0) {
+            return null; // no match — surfaces as an error, same as today
+        }
+
+        if ($candidates->count() === 1) {
+            return $candidates->first(); // unambiguous, safe regardless of middle initial
+        }
+
+        // Multiple people share surname + first name — middle initial is now REQUIRED to disambiguate
+        if (!$middleInitial) {
+            return null; // can't safely pick one — force it into the errors list instead of guessing
+        }
+
+        $filtered = $candidates->filter(function ($employee) use ($middleInitial) {
+            return strtolower(substr((string) $employee->middle_name, 0, 1)) === strtolower($middleInitial);
+        });
+
+        return $filtered->count() === 1 ? $filtered->first() : null;
     }
     private function countDatesInString(string $dateString): int
     {

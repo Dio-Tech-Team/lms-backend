@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('code')->unique(); // Prevent duplicate codes
             $table->boolean('is_active')->default(true)->index(); // Added index for faster filtering
             $table->timestamps();
-            $table->softDeletes();
+            // $table->softDeletes();
         });
     }
 

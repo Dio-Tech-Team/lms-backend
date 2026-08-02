@@ -85,14 +85,25 @@ class LeaveRecordController extends Controller
             $record = LeaveRecord::create($validated);
 
             // Update credit in same transaction
-            LeaveCredit::where('employee_id', $validated['employee_id'])
+            // LeaveCredit::where('employee_id', $validated['employee_id'])
+            //     ->where('leave_configuration_id', $validated['leave_configuration_id'])
+            //     ->where('year', now()->year)
+            //     ->update([
+            //         'used_credits'      => DB::raw('used_credits + ' . $validated['days_taken']),
+            //         'remaining_balance' => DB::raw('remaining_balance - ' . $validated['days_taken']),
+            //         'last_updated'      => now(),
+            //     ]);
+
+            $credit = LeaveCredit::where('employee_id', $validated['employee_id'])
                 ->where('leave_configuration_id', $validated['leave_configuration_id'])
                 ->where('year', now()->year)
-                ->update([
-                    'used_credits'      => DB::raw('used_credits + ' . $validated['days_taken']),
-                    'remaining_balance' => DB::raw('remaining_balance - ' . $validated['days_taken']),
-                    'last_updated'      => now(),
-                ]);
+                ->first();
+
+            if ($credit) {
+                $credit->increment('used_credits', $validated['days_taken']);
+                $credit->decrement('remaining_balance', $validated['days_taken']);
+                $credit->update(['last_updated' => now()]);
+            }
             // NEW — log the manual record entry
             ActivityLog::create([
                 'user_id'      => $request->user()->id,
@@ -224,14 +235,25 @@ class LeaveRecordController extends Controller
         ])->findOrFail($id);
 
         DB::transaction(function () use ($record) {
-            LeaveCredit::where('employee_id', $record->employee_id)
-                ->where('leave_configuration_id', $record->leave_configuration_id) // Fixed!
+            // LeaveCredit::where('employee_id', $record->employee_id)
+            //     ->where('leave_configuration_id', $record->leave_configuration_id) // Fixed!
+            //     ->where('year', now()->year)
+            //     ->update([
+            //         'used_credits'      => DB::raw('used_credits - ' . $record->days_taken),
+            //         'remaining_balance' => DB::raw('remaining_balance + ' . $record->days_taken),
+            //         'last_updated'      => now(),
+            //     ]);
+
+            $credit = LeaveCredit::where('employee_id', $record->employee_id)
+                ->where('leave_configuration_id', $record->leave_configuration_id)
                 ->where('year', now()->year)
-                ->update([
-                    'used_credits'      => DB::raw('used_credits - ' . $record->days_taken),
-                    'remaining_balance' => DB::raw('remaining_balance + ' . $record->days_taken),
-                    'last_updated'      => now(),
-                ]);
+                ->first();
+
+            if ($credit) {
+                $credit->decrement('used_credits', $record->days_taken);
+                $credit->increment('remaining_balance', $record->days_taken);
+                $credit->update(['last_updated' => now()]);
+            }
 
             $record->delete();
         });

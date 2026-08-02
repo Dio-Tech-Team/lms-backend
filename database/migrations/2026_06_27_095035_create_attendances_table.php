@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('month');
             $table->year('year');
             $table->index(['month', 'year']);
+            $table->unique(['employee_id', 'month', 'year']);
             $table->integer('total_working_days');
             $table->integer('absent_with_leave_days')->default(0);
             $table->integer('absent_without_leave_days')->default(0);

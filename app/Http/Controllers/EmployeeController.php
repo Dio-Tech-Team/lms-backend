@@ -21,6 +21,9 @@ class EmployeeController extends Controller
 {
     public function index(Request $request)
     {
+
+        $user = $request->user();
+
         $query = Employee::select([
             'employees.id',
             'employees.first_name',
@@ -37,6 +40,11 @@ class EmployeeController extends Controller
         ])
             ->join('users', 'employees.user_id', '=', 'users.id')
             ->join('departments', 'employees.department_id', '=', 'departments.id');
+
+
+        if (!in_array($user->role, ['hr_admin', 'super_admin'], true)) {
+            $query->where('employees.user_id', $user->id);
+        }
 
         // Apply department filter if present in request
         if ($request->filled('department_id')) {
@@ -109,7 +117,7 @@ class EmployeeController extends Controller
             'philhealth_number'                => 'nullable|string',
             'psn_number'                       => 'nullable|string',
             'tin_number'                       => 'nullable|string',
-            'employment_status'                => 'required|in:permanent,casual,elected,job_order',
+            'employment_status'                => 'required|in:permanent,casual,elected,job_order,resigned',
             'position'                         => 'required|string',
             'department_id'                    => 'required|exists:departments,id',
             'date_hired'                       => 'required|date',
@@ -202,10 +210,11 @@ class EmployeeController extends Controller
     }
 
 
-    public function show(string $id)
+    public function show(string $id, Request $request)
     {
         $employee = Employee::select([
             'employees.id',
+            'employees.user_id',
             'employees.department_id',
             'employees.first_name',
             'employees.middle_name',
@@ -251,6 +260,11 @@ class EmployeeController extends Controller
                 }
             ])
             ->findOrFail($id);
+
+        $user = $request->user();
+        if (!in_array($user->role, ['hr_admin', 'super_admin'], true) && $employee->user_id !== $user->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
         $stepIncrementInfo = $this->calculateStepIncrement($employee);
         $loyaltyPayInfo    = $this->calculateLoyaltyPay($employee);
         $retirementInfo    = $this->calculateRetirement($employee);
@@ -292,6 +306,13 @@ class EmployeeController extends Controller
 
     public function update(Request $request, string $id)
     {
+
+        // ADD THIS BLOCK — matches destroy()'s pattern
+        $user = $request->user();
+        if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $employee = Employee::findOrFail($id);
 
         $validated = $request->validate([
@@ -315,11 +336,11 @@ class EmployeeController extends Controller
             'tin_number'                       => 'nullable|string',
             'department_id'                    => 'sometimes|exists:departments,id',
             'position'                         => 'sometimes|string',
-            'employment_status'                => 'sometimes|in:permanent,casual,elected,job_order',
+            // 'employment_status'                => 'sometimes|in:permanent,casual,elected,job_order',
             'date_hired'                       => 'sometimes|date',
         ]);
 
-        $employee = Employee::findOrFail($id);
+        // $employee = Employee::findOrFail($id);
         $employee->update($validated);
 
 
@@ -367,8 +388,9 @@ class EmployeeController extends Controller
         $startDate   = $latestReset
             ? \Carbon\Carbon::parse($latestReset->effective_date)
             : \Carbon\Carbon::parse($employee->date_hired);
-        $yearsServed = max(0, $startDate->diffInYears(now()));
-        $currentStep = min(8, floor($yearsServed / 3) + 1);
+        $currentStep = $this->stepAsOf($startDate, now());
+        // $yearsServed = max(0, $startDate->diffInYears(now()));
+        // $currentStep = min(8, floor($yearsServed / 3) + 1);
         $nextStepDate = $startDate->copy()->addYears($currentStep * 3);
 
         $allSteps = [];
@@ -388,6 +410,65 @@ class EmployeeController extends Controller
             'all_steps'      => $allSteps,
         ];
     }
+
+    private function stepAsOf($baseDate, $asOfDate): int
+    {
+        $yearsServed = max(0, $baseDate->diffInYears($asOfDate));
+        return (int) min(8, floor($yearsServed / 3) + 1);
+    }
+    // private function calculateLoyaltyPay($employee)
+    // {
+    //     if ($employee->employment_status !== 'permanent') {
+    //         return [
+    //             'eligible'          => false,
+    //             'message'           => 'Not applicable - employee is not currently permanent',
+    //             'years_served'      => 0,
+    //             'years_until_next'  => null,
+    //             'next_milestone'    => 10,
+    //         ];
+    //     }
+
+    //     $employmentHistory = $employee->relationLoaded('employment_history')
+    //         ? $employee->employment_history
+    //         : $employee->employment_history()->orderBy('effective_date', 'desc')->get();
+
+    //     $earliestPermanent = $employmentHistory
+    //         ->filter(fn($history) => $history->new_employment_status === 'permanent')
+    //         ->sortBy('effective_date')
+    //         ->first();
+
+    //     $startDate = $earliestPermanent
+    //         ? \Carbon\Carbon::parse($earliestPermanent->effective_date)
+    //         : \Carbon\Carbon::parse($employee->date_hired);
+
+    //     $yearsServed = max(0, $startDate->diffInYears(now()));
+
+    //     if ($yearsServed < 10) {
+    //         $yearsUntilFirst = 10 - $yearsServed;
+    //         return [
+    //             'eligible'          => false,
+    //             'since'             => $startDate->format('Y-m-d'),
+    //             'years_served'      => $yearsServed,
+    //             'milestones_received'   => 0, //new added 
+    //             'years_until_next'  => $yearsUntilFirst,
+    //             'next_milestone'    => 10,
+    //         ];
+    //     }
+    //     $yearsAfterFirst = $yearsServed - 10;
+    //     $milestonesPassed = floor($yearsAfterFirst / 5) + 1;
+    //     $nextMilestone = 10 + ($milestonesPassed * 5);
+    //     $yearsUntilNext = $nextMilestone - $yearsServed;
+
+    //     return [
+    //         'eligible'              => true,
+    //         'since'                 => $startDate->format('Y-m-d'),
+    //         'years_served'          => $yearsServed,
+    //         'milestones_received'   => (int) $milestonesPassed,
+    //         'years_until_next'      => $yearsUntilNext,
+    //         'next_milestone'        => $nextMilestone,
+    //     ];
+    // }
+
     private function calculateLoyaltyPay($employee)
     {
         if ($employee->employment_status !== 'permanent') {
@@ -404,10 +485,24 @@ class EmployeeController extends Controller
             ? $employee->employment_history
             : $employee->employment_history()->orderBy('effective_date', 'desc')->get();
 
-        $earliestPermanent = $employmentHistory
-            ->filter(fn($history) => $history->new_employment_status === 'permanent')
-            ->sortBy('effective_date')
+        // Find the most recent resignation, if any — loyalty service resets after it
+        $latestResignation = $employmentHistory
+            ->filter(fn($history) => $history->new_employment_status === 'resigned')
+            ->sortByDesc('effective_date')
             ->first();
+
+        $permanentRecords = $employmentHistory
+            ->filter(fn($history) => $history->new_employment_status === 'permanent');
+
+        // If they resigned at some point, only count permanent records AFTER that resignation
+        if ($latestResignation) {
+            $resignationDate = \Carbon\Carbon::parse($latestResignation->effective_date);
+            $permanentRecords = $permanentRecords->filter(
+                fn($history) => \Carbon\Carbon::parse($history->effective_date)->gt($resignationDate)
+            );
+        }
+
+        $earliestPermanent = $permanentRecords->sortBy('effective_date')->first();
 
         $startDate = $earliestPermanent
             ? \Carbon\Carbon::parse($earliestPermanent->effective_date)
@@ -418,26 +513,27 @@ class EmployeeController extends Controller
         if ($yearsServed < 10) {
             $yearsUntilFirst = 10 - $yearsServed;
             return [
-                'eligible'          => false,
-                'since'             => $startDate->format('Y-m-d'),
-                'years_served'      => $yearsServed,
-                'milestones_received'   => 0, //new added 
-                'years_until_next'  => $yearsUntilFirst,
-                'next_milestone'    => 10,
+                'eligible'             => false,
+                'since'                => $startDate->format('Y-m-d'),
+                'years_served'         => $yearsServed,
+                'milestones_received'  => 0,
+                'years_until_next'     => $yearsUntilFirst,
+                'next_milestone'       => 10,
             ];
         }
+
         $yearsAfterFirst = $yearsServed - 10;
         $milestonesPassed = floor($yearsAfterFirst / 5) + 1;
         $nextMilestone = 10 + ($milestonesPassed * 5);
         $yearsUntilNext = $nextMilestone - $yearsServed;
 
         return [
-            'eligible'              => true,
-            'since'                 => $startDate->format('Y-m-d'),
-            'years_served'          => $yearsServed,
-            'milestones_received'   => (int) $milestonesPassed,
-            'years_until_next'      => $yearsUntilNext,
-            'next_milestone'        => $nextMilestone,
+            'eligible'             => true,
+            'since'                => $startDate->format('Y-m-d'),
+            'years_served'         => $yearsServed,
+            'milestones_received'  => (int) $milestonesPassed,
+            'years_until_next'     => $yearsUntilNext,
+            'next_milestone'       => $nextMilestone,
         ];
     }
 
@@ -458,9 +554,16 @@ class EmployeeController extends Controller
             'eligible_now'     => $age >= 65,
         ];
     }
-    public function leaveCard(string $id)
+    public function leaveCard(string $id, Request $request)
     {
-        $employee = Employee::select('id', 'first_name', 'surname', 'position')->findOrFail($id);
+        $employee = Employee::select('id', 'user_id', 'first_name', 'surname', 'position')->findOrFail($id);
+
+        // NEW — block access unless HR/admin or viewing own record
+        $user = $request->user();
+        if (!in_array($user->role, ['hr_admin', 'super_admin'], true) && $employee->user_id !== $user->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
 
         $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
         $slConfig = LeaveConfiguration::where('code', 'SL')->first();
@@ -563,44 +666,158 @@ class EmployeeController extends Controller
                 : ($employee->date_hired ? Carbon::parse($employee->date_hired) : null);
 
             if (!$baseDate) continue;
+            // Step just before the forecast year begins, and just before it ends
+            $stepBeforeYear = $this->stepAsOf($baseDate, Carbon::create($forecastYear - 1, 12, 31));
+            $stepAfterYear  = $this->stepAsOf($baseDate, Carbon::create($forecastYear, 12, 31));
 
-            // Calculate service years at the point of the future forecast year
-            $totalYearsAtForecast = $forecastYear - $baseDate->year;
-
-            // An increment only triggers on exact 3-year anniversaries relative to the reset date
-            if ($totalYearsAtForecast > 0 && $totalYearsAtForecast % 3 === 0) {
-
-                // Calculate current step stage right before this milestone hits
-                $currentStep = (int)(($totalYearsAtForecast - 3) / 3) + 1;
-                $nextStep = $currentStep + 1;
-
-                // Enforce government limits (Step 1 to Step 8)
-                $currentStepDisplay = min(max($currentStep, 1), 7);
-                $nextStepDisplay = min($nextStep, 8);
-
-                // Construct milestone date matching their anniversary month and day
-                $nextStepDate = Carbon::create(
-                    $forecastYear,
-                    $baseDate->month,
-                    $baseDate->day
-                )->format('Y-m-d');
+            // Only include employees whose step actually changes during this forecast year
+            if ($stepAfterYear > $stepBeforeYear) {
+                // The anniversary that triggers the new step: baseDate + (stepAfterYear-1)*3 years
+                $nextStepDate = $baseDate->copy()->addYears(($stepAfterYear - 1) * 3);
 
                 $forecastRecords[] = [
                     'employee_id'    => $employee->id,
                     'name'           => "{$employee->first_name} {$employee->surname}",
                     'position'       => $employee->position,
                     'department'     => $employee->department?->name ?? 'Unassigned',
-                    'current_step'   => $currentStepDisplay,
-                    'next_step'      => $nextStepDisplay,
-                    'next_step_date' => $nextStepDate,
+                    'current_step'   => $stepBeforeYear,
+                    'next_step'      => $stepAfterYear,
+                    'next_step_date' => $nextStepDate->format('Y-m-d'),
                 ];
             }
         }
+
+        //     $totalYearsAtForecast = $forecastYear - $baseDate->year;
+
+        //     if ($totalYearsAtForecast > 0 && $totalYearsAtForecast % 3 === 0) {
+        //         $currentStep = (int)(($totalYearsAtForecast - 3) / 3) + 1;
+        //         $nextStep = $currentStep + 1;
+
+        //         $currentStepDisplay = min(max($currentStep, 1), 7);
+        //         $nextStepDisplay = min($nextStep, 8);
+        //         $nextStepDate = Carbon::create(
+        //             $forecastYear,
+        //             $baseDate->month,
+        //             $baseDate->day
+        //         )->format('Y-m-d');
+
+        //         $forecastRecords[] = [
+        //             'employee_id'    => $employee->id,
+        //             'name'           => "{$employee->first_name} {$employee->surname}",
+        //             'position'       => $employee->position,
+        //             'department'     => $employee->department?->name ?? 'Unassigned',
+        //             'current_step'   => $currentStepDisplay,
+        //             'next_step'      => $nextStepDisplay,
+        //             'next_step_date' => $nextStepDate,
+        //         ];
+        //     }
+        // }
 
         return response()->json([
             'year'      => $forecastYear,
             'employees' => $forecastRecords
         ]);
+    }
+
+    public function resign(Request $request, string $id)
+    {
+        $user = $request->user();
+        if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $request->validate([
+            'effective_date' => 'required|date',
+            'remarks'        => 'nullable|string',
+        ]);
+
+        $employee = Employee::findOrFail($id);
+
+        if ($employee->employment_status === 'resigned') {
+            return response()->json(['message' => 'Employee is already marked as resigned'], 422);
+        }
+
+        DB::transaction(function () use ($employee, $request, $user) {
+            EmploymentHistory::create([
+                'employee_id'                 => $employee->id,
+                'previous_position'           => $employee->position,
+                'new_position'                => $employee->position,
+                'previous_employment_status'  => $employee->employment_status,
+                'new_employment_status'       => 'resigned',
+                'effective_date'              => $request->effective_date,
+                'remarks'                     => $request->remarks ?? 'Resignation',
+            ]);
+
+            $employee->update([
+                'employment_status' => 'resigned',
+                'is_active'          => false,
+            ]);
+
+            ActivityLog::create([
+                'user_id'      => $user->id,
+                'action'       => 'employee.resigned',
+                'description'  => "Marked {$employee->first_name} {$employee->surname} as resigned effective {$request->effective_date}",
+                'subject_type' => 'Employee',
+                'subject_id'   => $employee->id,
+            ]);
+        });
+
+        return response()->json(['message' => 'Employee marked as resigned successfully']);
+    }
+
+    public function rehire(Request $request, string $id)
+    {
+        $user = $request->user();
+        if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $request->validate([
+            'employment_status' => 'required|in:permanent,casual,elected,job_order',
+            'position'           => 'required|string',
+            'department_id'      => 'sometimes|exists:departments,id',
+            'effective_date'     => 'required|date',
+            'remarks'            => 'nullable|string',
+        ]);
+
+        $employee = Employee::findOrFail($id);
+
+        if ($employee->employment_status !== 'resigned') {
+            return response()->json(['message' => 'Employee is not currently marked as resigned'], 422);
+        }
+
+        DB::transaction(function () use ($employee, $request, $user) {
+            EmploymentHistory::create([
+                'employee_id'                 => $employee->id,
+                'previous_position'           => $employee->position,
+                'new_position'                => $request->position,
+                'previous_employment_status'  => 'resigned',
+                'new_employment_status'       => $request->employment_status,
+                'effective_date'              => $request->effective_date,
+                'remarks'                     => $request->remarks ?? 'Rehired',
+            ]);
+
+            $employee->update([
+                'employment_status' => $request->employment_status,
+                'position'           => $request->position,
+                'department_id'      => $request->department_id ?? $employee->department_id,
+                'is_active'          => true,
+            ]);
+
+            // Re-initialize leave credits for the current year, same as a fresh hire
+            $creditController = new LeaveCreditController();
+            $creditController->initializeSingleEmployeeCredits($employee->id, now()->year);
+
+            ActivityLog::create([
+                'user_id'      => $user->id,
+                'action'       => 'employee.rehired',
+                'description'  => "Rehired {$employee->first_name} {$employee->surname} as {$request->position} effective {$request->effective_date}",
+                'subject_type' => 'Employee',
+                'subject_id'   => $employee->id,
+            ]);
+        });
+
+        return response()->json(['message' => 'Employee rehired successfully']);
     }
     public function destroy(string $id)
     {

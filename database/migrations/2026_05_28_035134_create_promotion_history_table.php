@@ -16,8 +16,8 @@ return new class extends Migration
             $table->foreignId('employee_id')->constrained()->onDelete('cascade');
             $table->string('previous_position')->nullable();
             $table->string('new_position');
-            $table->enum('previous_employment_status', ['permanent', 'casual', 'elected', 'job_order'])->nullable();
-            $table->enum('new_employment_status', ['permanent', 'casual', 'elected', 'job_order']);
+            $table->enum('previous_employment_status', ['permanent', 'casual', 'elected', 'job_order', 'resigned'])->nullable();
+            $table->enum('new_employment_status', ['permanent', 'casual', 'elected', 'job_order', 'resigned']);
             $table->date('effective_date');
             $table->text('remarks')->nullable();
             $table->timestamps();
