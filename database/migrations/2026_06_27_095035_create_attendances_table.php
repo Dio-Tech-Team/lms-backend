@@ -28,7 +28,8 @@ return new class extends Migration
             $table->decimal('vl_earned', 8, 3)->nullable();
             $table->decimal('sl_earned', 8, 3)->nullable();
             $table->decimal('tardiness_equivalent_days', 8, 3)->nullable();
-            $table->foreignId('uploaded_by')->constrained('users')->onDelete('cascade');
+            // $table->foreignId('uploaded_by')->constrained('users')->onDelete('cascade');
+            $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
         });
     }

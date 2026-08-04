@@ -74,6 +74,12 @@ class AttendanceController extends Controller
                         //     continue;
                         // }
                         // ----------------------
+
+                        // NEW — JO employees don't accrue VL/SL, and inactive/resigned employees shouldn't accrue anything
+                        if ($employee->employment_status === 'job_order' || !$employee->is_active) {
+                            $skipped[] = "[{$sheetName}] {$employee->first_name} {$employee->surname}: skipped (Job Order or inactive — not eligible for VL/SL accrual).";
+                            continue;
+                        }
                         $alreadyExists = Attendance::where('employee_id', $employee->id)
                             ->where('month', $monthName)
                             ->where('year', $year)
@@ -157,12 +163,55 @@ class AttendanceController extends Controller
             'subject_type' => 'Attendance',
             'subject_id'   => null, // no single record — this action affects many
         ]);
+
+        $missingByDepartment = $this->getMissingAttendance($monthName, $year);
         return response()->json([
             'message' => 'Attendance processed successfully',
             'results' => $results,
             'errors'  => $errors,
             'skipped' => $skipped,
+            'total_missing'         => $missingByDepartment->flatten(1)->count(),
+            'missing_by_department' => $missingByDepartment,
         ]);
+    }
+
+    // NEW — standalone reconciliation check, independent of uploading
+    public function checkMissingAttendance(Request $request)
+    {
+        $request->validate([
+            'month' => 'required|integer|min:1|max:12',
+            'year'  => 'required|integer',
+        ]);
+
+        $monthName = Carbon::create($request->year, $request->month, 1)->format('F');
+        $missingByDepartment = $this->getMissingAttendance($monthName, $request->year);
+
+        return response()->json([
+            'month'                 => $monthName,
+            'year'                  => $request->year,
+            'total_missing'         => $missingByDepartment->flatten(1)->count(),
+            'missing_by_department' => $missingByDepartment,
+        ]);
+    }
+
+    private function getMissingAttendance(string $monthName, int $year)
+    {
+        return Employee::where('is_active', true)
+            ->whereIn('employment_status', ['permanent', 'casual', 'elected']) // JO excluded — not tracked for VL/SL
+            ->whereDoesntHave('attendances', function ($query) use ($monthName, $year) {
+                $query->where('month', $monthName)->where('year', $year);
+            })
+            ->with('department:id,name')
+            ->select(['id', 'first_name', 'surname', 'department_id', 'employment_status'])
+            ->get()
+            ->groupBy(fn($employee) => $employee->department->name ?? 'Unassigned')
+            ->map(function ($employees) {
+                return $employees->map(fn($e) => [
+                    'id'                => $e->id,
+                    'name'              => "{$e->first_name} {$e->surname}",
+                    'employment_status' => $e->employment_status,
+                ]);
+            });
     }
     // private function findEmployeeByName(string $name)
     // {

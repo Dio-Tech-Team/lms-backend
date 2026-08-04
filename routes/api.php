@@ -84,6 +84,8 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
         // Attendance Admin
         Route::post('attendance/upload', [AttendanceController::class, 'upload']);
+        Route::get('attendance/missing-check', [AttendanceController::class, 'checkMissingAttendance']);
+
         // --- Promotion History ---
         Route::prefix('employees/{employeeId}/promotions')->group(function () {
             Route::get('/', [EmploymentHistoryController::class, 'index']);
@@ -93,7 +95,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
         Route::prefix('employees/{employeeId}/leave-credits')->group(function () {
             Route::get('/', [LeaveCreditController::class, 'index']);
-            // Route::post('/initialize', [LeaveCreditController::class, 'initializeCredits']);
+            Route::post('/initialize', [LeaveCreditController::class, 'initializeCredits']);
             Route::put('/{creditId}', [LeaveCreditController::class, 'update']);
         });
     });

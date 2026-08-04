@@ -219,6 +219,13 @@ class LeaveCreditController extends Controller
             'message' => "Successfully initialized all leave credits for the year {$targetYear}!",
         ]);
     }
+    // LeaveCreditController.php
+    public function initializeCredits(Request $request, $employeeId)
+    {
+        $this->initializeSingleEmployeeCredits($employeeId, $request->input('year', now()->year));
+
+        return response()->json(['message' => 'Leave credits initialized successfully']);
+    }
 
     public function update(Request $request, $employeeId, $creditId)
     {

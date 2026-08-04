@@ -22,6 +22,7 @@ class EmploymentHistoryController extends Controller
         $promotion = EmploymentHistory::select('employee_id', 'previous_position', 'new_position', 'previous_employment_status', 'new_employment_status', 'effective_date', 'remarks')
             ->where('employee_id', $employeeId)
             ->orderBy('effective_date', 'desc') // Synced column name
+            ->orderBy('id', 'desc')
             ->get();
 
         return response()->json([

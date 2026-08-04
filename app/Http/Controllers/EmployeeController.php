@@ -256,7 +256,8 @@ class EmployeeController extends Controller
                         'new_employment_status',
                         'effective_date',
                         'remarks'
-                    )->orderBy('effective_date', 'desc');
+                    )->orderBy('effective_date', 'desc')
+                        ->orderBy('id', 'desc');
                 }
             ])
             ->findOrFail($id);
@@ -498,7 +499,7 @@ class EmployeeController extends Controller
         if ($latestResignation) {
             $resignationDate = \Carbon\Carbon::parse($latestResignation->effective_date);
             $permanentRecords = $permanentRecords->filter(
-                fn($history) => \Carbon\Carbon::parse($history->effective_date)->gt($resignationDate)
+                fn($history) => \Carbon\Carbon::parse($history->effective_date)->gte($resignationDate)
             );
         }
 
