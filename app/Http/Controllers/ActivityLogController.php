@@ -14,12 +14,21 @@ class ActivityLogController extends Controller
             ->when($request->filled('action'), function ($query) use ($request) {
                 $query->where('action', $request->action);
             })
-            ->when($request->filled('user_id'), function ($query) use ($request) {
-                $query->where('user_id', $request->user_id);
+            ->when($request->filled('role'), function ($query) use ($request) {
+                $query->whereHas('user', fn($q) => $q->where('role', $request->role));
             })
             ->orderBy('created_at', 'desc')
             ->paginate(20);
 
         return response()->json($logs);
+    }
+    public function actions()
+    {
+        $actions = ActivityLog::select('action')
+            ->distinct()
+            ->orderBy('action')
+            ->pluck('action');
+
+        return response()->json($actions);
     }
 }

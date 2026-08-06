@@ -78,7 +78,7 @@ class EmployeeController extends Controller
             ->join('departments', 'employees.department_id', '=', 'departments.id')
             ->groupBy('departments.name')
             ->orderByDesc('count')
-            ->limit(6)
+            // ->limit(6)
             ->get();
 
         return response()->json([

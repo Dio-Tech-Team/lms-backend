@@ -9,11 +9,13 @@ use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         return User::select('id', 'username', 'email', 'role', 'created_at')
+            ->when($request->filled('role'), fn($q) => $q->where('role', $request->role))
             ->orderBy('username')
-            ->get();
+            ->paginate(20);
+        // ->get();
     }
 
     public function store(Request $request)

@@ -13,7 +13,8 @@ use App\Http\Controllers\{
     EmploymentHistoryController,
     AttendanceController,
     UserController,
-    ActivityLogController
+    ActivityLogController,
+    DashboardController
 };
 
 Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
@@ -98,6 +99,8 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
             Route::post('/initialize', [LeaveCreditController::class, 'initializeCredits']);
             Route::put('/{creditId}', [LeaveCreditController::class, 'update']);
         });
+
+        Route::get('/dashboard/leave-stats', [DashboardController::class, 'leaveStats']);
     });
 
     // 4. SUPER ADMIN ONLY ROUTES
@@ -117,6 +120,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::delete('departments/{id}', [DepartmentController::class, 'destroy']);
 
         // NEW — Activity Logs
+        Route::get('/activity-logs/actions', [ActivityLogController::class, 'actions']);
         Route::get('activity-logs', [ActivityLogController::class, 'index']);
     });
 });
