@@ -239,6 +239,74 @@ class LeaveApplicationController extends Controller
             'remaining_balance'    => $credit->remaining_balance ?? 0,
         ], 201);
     }
+    // public function approve(Request $request, $id)
+    // {
+    //     $application = LeaveApplication::findOrFail($id);
+    //     $config = LeaveConfiguration::find($application->leave_configuration_id);
+
+    //     if ($application->status !== 'pending') {
+    //         return response()->json(['message' => 'Application is already ' . $application->status], 400);
+    //     }
+
+    //     // If it's Force Leave, we need the VL credit record, not the FL record.
+    //     $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
+    //     $credit = LeaveCredit::where('employee_id', $application->employee_id)
+    //         ->whereHas('leaveConfiguration', function ($query) use ($targetCode) {
+    //             $query->where('code', $targetCode);
+    //         })
+    //         ->where('year', now()->year)
+    //         ->lockForUpdate()
+    //         ->first();
+
+    //     // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
+    //     if (in_array($config->code, ['WL', 'SPL', 'FL'])) {
+    //         if (!$credit || $credit->remaining_balance < $application->days_applied) {
+    //             // Use the $config->name to make the message clear
+    //             return response()->json(['message' => 'Insufficient balance for ' . $config->name], 422);
+    //         }
+    //     }
+
+    //     // 2. TRANSACTIONAL PROCESSING
+    //     DB::transaction(function () use ($application, $request, $credit, $config) {
+    //         $application->update([
+    //             'status'      => 'approved',
+    //             'reviewed_by' => $request->user()->id,
+    //             'reviewed_at' => now(),
+    //         ]);
+
+    //         // Only deduct if credit exists AND has enough balance
+    //         $isNoPay = false;
+    //         if ($credit && $credit->remaining_balance >= $application->days_applied) {
+    //             $credit->used_credits      += $application->days_applied;
+    //             $credit->remaining_balance -= $application->days_applied;
+    //             $credit->last_updated       = now();
+    //             $credit->save();
+    //         } else {
+    //             $isNoPay = true; // Flag as No Pay
+    //         }
+
+    //         LeaveRecord::create([
+    //             'employee_id'            => $application->employee_id,
+    //             'leave_configuration_id' => $application->leave_configuration_id,
+    //             'recorded_by'            => $request->user()->id,
+    //             'start_date'             => $application->start_date,
+    //             'end_date'               => $application->end_date,
+    //             'days_taken'             => $application->days_applied,
+    //             'remarks'                => 'Approved. ' . ($isNoPay ? 'Status: No Pay' : 'Balance deducted.'),
+    //         ]);
+
+    //         // NEW — log the approval
+    //         ActivityLog::create([
+    //             'user_id'      => $request->user()->id,
+    //             'action'       => 'leave_application.approved',
+    //             'description'  => "Approved leave application #{$application->id} ({$config->name})",
+    //             'subject_type' => 'LeaveApplication',
+    //             'subject_id'   => $application->id,
+    //         ]);
+    //     });
+
+    //     return response()->json(['message' => 'Leave application approved successfully']);
+    // }
     public function approve(Request $request, $id)
     {
         $application = LeaveApplication::findOrFail($id);
@@ -250,24 +318,25 @@ class LeaveApplicationController extends Controller
 
         // If it's Force Leave, we need the VL credit record, not the FL record.
         $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
-        $credit = LeaveCredit::where('employee_id', $application->employee_id)
-            ->whereHas('leaveConfiguration', function ($query) use ($targetCode) {
-                $query->where('code', $targetCode);
-            })
-            ->where('year', now()->year)
-            ->lockForUpdate()
-            ->first();
 
-        // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
-        if (in_array($config->code, ['WL', 'SPL', 'FL'])) {
-            if (!$credit || $credit->remaining_balance < $application->days_applied) {
-                // Use the $config->name to make the message clear
-                return response()->json(['message' => 'Insufficient balance for ' . $config->name], 422);
+        $result = DB::transaction(function () use ($application, $request, $config, $targetCode) {
+            // MOVED inside transaction — lockForUpdate() only holds the row lock
+            // for the life of an active transaction, so it must be acquired here.
+            $credit = LeaveCredit::where('employee_id', $application->employee_id)
+                ->whereHas('leaveConfiguration', function ($query) use ($targetCode) {
+                    $query->where('code', $targetCode);
+                })
+                ->where('year', now()->year)
+                ->lockForUpdate()
+                ->first();
+
+            // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
+            if (in_array($config->code, ['WL', 'SPL', 'FL'])) {
+                if (!$credit || $credit->remaining_balance < $application->days_applied) {
+                    return ['error' => 'Insufficient balance for ' . $config->name];
+                }
             }
-        }
 
-        // 2. TRANSACTIONAL PROCESSING
-        DB::transaction(function () use ($application, $request, $credit, $config) {
             $application->update([
                 'status'      => 'approved',
                 'reviewed_by' => $request->user()->id,
@@ -303,11 +372,16 @@ class LeaveApplicationController extends Controller
                 'subject_type' => 'LeaveApplication',
                 'subject_id'   => $application->id,
             ]);
+
+            return ['error' => null];
         });
+
+        if ($result['error']) {
+            return response()->json(['message' => $result['error']], 422);
+        }
 
         return response()->json(['message' => 'Leave application approved successfully']);
     }
-
     public function reject(Request $request, $id)
     {
         $application = LeaveApplication::findOrFail($id);

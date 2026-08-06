@@ -25,6 +25,13 @@ class LeaveCredit extends Model
         'last_updated' => 'datetime',
     ];
     public $timestamps = true;
+
+    protected static function booted(): void
+    {
+        static::saving(function (LeaveCredit $credit) {
+            $credit->remaining_balance = $credit->total_credits - $credit->used_credits;
+        });
+    }
     public function employee()
     {
         return $this->belongsTo(Employee::class);
