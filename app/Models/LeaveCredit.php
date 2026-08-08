@@ -41,4 +41,16 @@ class LeaveCredit extends Model
     {
         return $this->belongsTo(LeaveConfiguration::class);
     }
+    public function deductLeave(float $days): float
+    {
+        $available = (float) $this->remaining_balance;
+        $covered   = min($available, $days);
+        $noPay     = $days - $covered;
+
+        $this->used_credits += $covered;
+        $this->last_updated  = now();
+        $this->save();
+
+        return $noPay;
+    }
 }

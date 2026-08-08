@@ -15,6 +15,7 @@ class LeaveRecord extends Model
         'start_date',
         'end_date',
         'days_taken',
+        'no_pay_days',
         'remarks',
     ];
 

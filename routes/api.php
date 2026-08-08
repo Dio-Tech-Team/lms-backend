@@ -14,7 +14,8 @@ use App\Http\Controllers\{
     AttendanceController,
     UserController,
     ActivityLogController,
-    DashboardController
+    DashboardController,
+    LeaveMonetizationController
 };
 
 Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
@@ -56,11 +57,14 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('/{id}/pdf', [LeaveApplicationController::class, 'generatePdf']);
     });
 
-    // --- Attendance ---
-    Route::get('attendance', [AttendanceController::class, 'index']);
 
     Route::get('leave-configurations', [LeaveConfigurationController::class, 'index']);
     Route::get('leave-configurations/{id}', [LeaveConfigurationController::class, 'show']);
+
+    Route::prefix('leave-monetizations')->group(function () {
+        Route::get('/', [LeaveMonetizationController::class, 'index']);
+        Route::post('/', [LeaveMonetizationController::class, 'store']);
+    });
 
     // 3. HR ADMIN ONLY ROUTES (Using your new Middleware)
     Route::middleware('role:super_admin,hr_admin')->group(function () {
@@ -101,6 +105,12 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         });
 
         Route::get('/dashboard/leave-stats', [DashboardController::class, 'leaveStats']);
+        // --- Attendance ---
+        Route::get('attendance', [AttendanceController::class, 'index']);
+
+
+        Route::post('leave-monetizations/{id}/approve', [LeaveMonetizationController::class, 'approve']);
+        Route::post('leave-monetizations/{id}/reject', [LeaveMonetizationController::class, 'reject']);
     });
 
     // 4. SUPER ADMIN ONLY ROUTES

@@ -42,11 +42,17 @@ class LeaveApplicationController extends Controller
             'leave_configurations.name as leave_type_name',
             'leave_configurations.code as leave_type_code',
             'users.username as reviewed_by_username',
+            'leave_credits.remaining_balance',
         ])
             ->join('employees', 'leave_applications.employee_id', '=', 'employees.id')
             ->join('departments', 'employees.department_id', '=', 'departments.id')
             ->join('leave_configurations', 'leave_applications.leave_configuration_id', '=', 'leave_configurations.id')
             ->leftJoin('users', 'leave_applications.reviewed_by', '=', 'users.id') // LEFT JOIN since reviewer may be null
+            ->leftJoin('leave_credits', function ($join) {
+                $join->on('leave_credits.employee_id', '=', 'leave_applications.employee_id')
+                    ->on('leave_credits.leave_configuration_id', '=', 'leave_applications.leave_configuration_id')
+                    ->whereRaw('leave_credits.year = YEAR(leave_applications.applied_at)');
+            })
             // RESTRICT REGULAR EMPLOYEES TO THEIR OWN APPLICATIONS
             ->when(!$this->isAdmin($user), function ($query) use ($user) {
                 $query->where('leave_applications.employee_id', $user->employee?->id);
@@ -127,12 +133,6 @@ class LeaveApplicationController extends Controller
                 return response()->json(['message' => 'You already have a pending application for these dates.'], 422);
             }
         }
-
-        // Fetch leave config
-        // $config = LeaveConfiguration::select(['id', 'code', 'name'])
-        //     ->findOrFail($validated['leave_configuration_id']);
-
-        // 1. Calculate the year from the start date
         $year = Carbon::parse($validated['start_date'])->year;
 
         // Fetch credit once
@@ -183,9 +183,18 @@ class LeaveApplicationController extends Controller
             ], 422);
         }
 
+        // Add this line before the paper-submission branch
+        $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
+        $deductionCredit = ($targetCode === $config->code)
+            ? $credit
+            : LeaveCredit::where('employee_id', $employee->id)
+            ->whereHas('leaveConfiguration', fn($q) => $q->where('code', $targetCode))
+            ->where('year', $year)
+            ->first();
+
         // 2. Choose Workflow Route
         if ($request->boolean('is_paper_submission')) {
-            $application = DB::transaction(function () use ($employee, $validated, $credit, $request, $config) {
+            $application = DB::transaction(function () use ($employee, $validated,  $deductionCredit, $request, $config) {
                 $app = LeaveApplication::create([
                     'employee_id'            => $employee->id,
                     'leave_configuration_id' => $validated['leave_configuration_id'],
@@ -199,6 +208,7 @@ class LeaveApplicationController extends Controller
                     'reviewed_by'            => $request->user()->id,
                     'filed_by'               => $request->user()->id,
                 ]);
+                $noPayDays = $deductionCredit ? $deductionCredit->deductLeave((float) $validated['days_applied']) : (float) $validated['days_applied'];
 
                 LeaveRecord::create([
                     'employee_id'            => $employee->id,
@@ -207,15 +217,9 @@ class LeaveApplicationController extends Controller
                     'start_date'             => $validated['start_date'],
                     'end_date'               => $validated['end_date'],
                     'days_taken'             => $validated['days_applied'],
-                    'remarks'                => 'Paper Submission Backup ID: ' . $app->id,
+                    'no_pay_days'            => $noPayDays,
+                    'remarks'                => ($noPayDays > 0 ? "{$noPayDays} day(s) LWOP. " : '') . 'Paper Submission Backup ID: ' . $app->id,
                 ]);
-
-                if ($credit) {
-                    $credit->used_credits      += $validated['days_applied'];
-                    $credit->remaining_balance -= $validated['days_applied'];
-                    $credit->last_updated       = now();
-                    $credit->save();
-                }
 
                 return $app;
             });
@@ -239,74 +243,6 @@ class LeaveApplicationController extends Controller
             'remaining_balance'    => $credit->remaining_balance ?? 0,
         ], 201);
     }
-    // public function approve(Request $request, $id)
-    // {
-    //     $application = LeaveApplication::findOrFail($id);
-    //     $config = LeaveConfiguration::find($application->leave_configuration_id);
-
-    //     if ($application->status !== 'pending') {
-    //         return response()->json(['message' => 'Application is already ' . $application->status], 400);
-    //     }
-
-    //     // If it's Force Leave, we need the VL credit record, not the FL record.
-    //     $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
-    //     $credit = LeaveCredit::where('employee_id', $application->employee_id)
-    //         ->whereHas('leaveConfiguration', function ($query) use ($targetCode) {
-    //             $query->where('code', $targetCode);
-    //         })
-    //         ->where('year', now()->year)
-    //         ->lockForUpdate()
-    //         ->first();
-
-    //     // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
-    //     if (in_array($config->code, ['WL', 'SPL', 'FL'])) {
-    //         if (!$credit || $credit->remaining_balance < $application->days_applied) {
-    //             // Use the $config->name to make the message clear
-    //             return response()->json(['message' => 'Insufficient balance for ' . $config->name], 422);
-    //         }
-    //     }
-
-    //     // 2. TRANSACTIONAL PROCESSING
-    //     DB::transaction(function () use ($application, $request, $credit, $config) {
-    //         $application->update([
-    //             'status'      => 'approved',
-    //             'reviewed_by' => $request->user()->id,
-    //             'reviewed_at' => now(),
-    //         ]);
-
-    //         // Only deduct if credit exists AND has enough balance
-    //         $isNoPay = false;
-    //         if ($credit && $credit->remaining_balance >= $application->days_applied) {
-    //             $credit->used_credits      += $application->days_applied;
-    //             $credit->remaining_balance -= $application->days_applied;
-    //             $credit->last_updated       = now();
-    //             $credit->save();
-    //         } else {
-    //             $isNoPay = true; // Flag as No Pay
-    //         }
-
-    //         LeaveRecord::create([
-    //             'employee_id'            => $application->employee_id,
-    //             'leave_configuration_id' => $application->leave_configuration_id,
-    //             'recorded_by'            => $request->user()->id,
-    //             'start_date'             => $application->start_date,
-    //             'end_date'               => $application->end_date,
-    //             'days_taken'             => $application->days_applied,
-    //             'remarks'                => 'Approved. ' . ($isNoPay ? 'Status: No Pay' : 'Balance deducted.'),
-    //         ]);
-
-    //         // NEW — log the approval
-    //         ActivityLog::create([
-    //             'user_id'      => $request->user()->id,
-    //             'action'       => 'leave_application.approved',
-    //             'description'  => "Approved leave application #{$application->id} ({$config->name})",
-    //             'subject_type' => 'LeaveApplication',
-    //             'subject_id'   => $application->id,
-    //         ]);
-    //     });
-
-    //     return response()->json(['message' => 'Leave application approved successfully']);
-    // }
     public function approve(Request $request, $id)
     {
         $application = LeaveApplication::findOrFail($id);
@@ -319,14 +255,14 @@ class LeaveApplicationController extends Controller
         // If it's Force Leave, we need the VL credit record, not the FL record.
         $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
 
-        $result = DB::transaction(function () use ($application, $request, $config, $targetCode) {
-            // MOVED inside transaction — lockForUpdate() only holds the row lock
-            // for the life of an active transaction, so it must be acquired here.
+        $year = Carbon::parse($application->start_date)->year;
+
+        $result = DB::transaction(function () use ($application, $request, $config, $targetCode, $year) {
             $credit = LeaveCredit::where('employee_id', $application->employee_id)
                 ->whereHas('leaveConfiguration', function ($query) use ($targetCode) {
                     $query->where('code', $targetCode);
                 })
-                ->where('year', now()->year)
+                ->where('year', $year)
                 ->lockForUpdate()
                 ->first();
 
@@ -343,16 +279,7 @@ class LeaveApplicationController extends Controller
                 'reviewed_at' => now(),
             ]);
 
-            // Only deduct if credit exists AND has enough balance
-            $isNoPay = false;
-            if ($credit && $credit->remaining_balance >= $application->days_applied) {
-                $credit->used_credits      += $application->days_applied;
-                $credit->remaining_balance -= $application->days_applied;
-                $credit->last_updated       = now();
-                $credit->save();
-            } else {
-                $isNoPay = true; // Flag as No Pay
-            }
+            $noPayDays = $credit ? $credit->deductLeave((float) $application->days_applied) : (float) $application->days_applied;
 
             LeaveRecord::create([
                 'employee_id'            => $application->employee_id,
@@ -361,10 +288,12 @@ class LeaveApplicationController extends Controller
                 'start_date'             => $application->start_date,
                 'end_date'               => $application->end_date,
                 'days_taken'             => $application->days_applied,
-                'remarks'                => 'Approved. ' . ($isNoPay ? 'Status: No Pay' : 'Balance deducted.'),
+                'no_pay_days'            => $noPayDays,
+                'remarks'                => $noPayDays > 0
+                    ? "Approved. {$noPayDays} day(s) Leave Without Pay."
+                    : 'Approved. Balance deducted.',
             ]);
 
-            // NEW — log the approval
             ActivityLog::create([
                 'user_id'      => $request->user()->id,
                 'action'       => 'leave_application.approved',
@@ -472,12 +401,6 @@ class LeaveApplicationController extends Controller
             ->findOrFail($id);
         $user = $request->user();
 
-        // if ($user->role !== 'hr_admin' && $application->employee_id !== $user->employee?->id) {
-        //     return response()->json([
-        //         'message' => 'Unauthorized: You can only view your own leave applications.'
-        //     ], 403);
-        // }
-
         if (!$this->isAdmin($user) && $application->employee_id !== $user->employee?->id) {
             return response()->json([
                 'message' => 'Unauthorized: You can only view your own leave applications.'
@@ -510,10 +433,18 @@ class LeaveApplicationController extends Controller
             ->get()
             ->keyBy('code');
 
+        // $credits = LeaveCredit::select(['leave_configuration_id', 'total_credits', 'remaining_balance'])
+        //     ->where('employee_id', $application->employee_id)
+        //     ->whereIn('leave_configuration_id', $configs->pluck('id'))
+        //     ->where('year', now()->year)
+        //     ->get()
+        //     ->keyBy('leave_configuration_id');
+        $year = Carbon::parse($application->start_date)->year;
+
         $credits = LeaveCredit::select(['leave_configuration_id', 'total_credits', 'remaining_balance'])
             ->where('employee_id', $application->employee_id)
             ->whereIn('leave_configuration_id', $configs->pluck('id'))
-            ->where('year', now()->year)
+            ->where('year', $year)
             ->get()
             ->keyBy('leave_configuration_id');
 

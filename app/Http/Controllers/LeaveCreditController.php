@@ -279,6 +279,7 @@ class LeaveCreditController extends Controller
         $balances = LeaveCredit::join('leave_configurations', 'leave_credits.leave_configuration_id', '=', 'leave_configurations.id')
             ->where('leave_credits.employee_id', $employee->id)
             ->where('leave_credits.year', now()->year)
+            ->where('leave_configurations.is_active', true)
             ->select(
                 'leave_configurations.id as leave_configuration_id',
                 'leave_configurations.name',
