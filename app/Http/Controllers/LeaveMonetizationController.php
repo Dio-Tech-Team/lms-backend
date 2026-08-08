@@ -44,8 +44,20 @@ class LeaveMonetizationController extends Controller
             ->when(!$this->isAdmin($user), function ($q) use ($user) {
                 $q->where('leave_monetizations.employee_id', $user->employee?->id);
             })
+            ->when($this->isAdmin($user) && $request->filled('employee_id'), function ($q) use ($request) {
+                $q->where('leave_monetizations.employee_id', $request->employee_id);
+            })
             ->when($request->status, function ($q) use ($request) {
                 $q->where('leave_monetizations.status', $request->status);
+            })
+            ->when($request->search, function ($q) use ($request) {
+                $q->where(function ($sub) use ($request) {
+                    $sub->where('employees.first_name', 'LIKE', '%' . $request->search . '%')
+                        ->orWhere('employees.surname', 'LIKE', '%' . $request->search . '%');
+                });
+            })
+            ->when($request->filled('year'), function ($q) use ($request) {
+                $q->whereYear('leave_monetizations.applied_at', $request->year);
             })
             ->orderBy('leave_monetizations.created_at', 'desc')
             ->paginate(15);

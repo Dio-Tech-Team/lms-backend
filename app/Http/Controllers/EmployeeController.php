@@ -584,6 +584,25 @@ class EmployeeController extends Controller
     {
         $entries = [];
 
+        if ($config) {
+            $credit = \App\Models\LeaveCredit::where('employee_id', $employee->id)
+                ->where('leave_configuration_id', $config->id)
+                ->where('year', now()->year)
+                ->first();
+
+            if ($credit && (float) $credit->opening_balance > 0) {
+                $entries[] = [
+                    'sort_date'   => \Carbon\Carbon::parse($employee->date_hired)->subDay(),
+                    'period'      => 'Opening Balance',
+                    'particulars' => 'Transferred from physical leave card',
+                    'earned'      => round((float) $credit->opening_balance, 3),
+                    'abs_wp'      => 0,
+                    'abs_wop'     => 0,
+                    'used'        => 0,
+                ];
+            }
+        }
+
         $attendanceRows = \App\Models\Attendance::where('employee_id', $employee->id)->get();
 
         foreach ($attendanceRows as $row) {
@@ -602,40 +621,132 @@ class EmployeeController extends Controller
             ];
         }
 
-        // USED entries — approved leave actually taken for this leave type
         if ($config) {
             $leaveRecords = \App\Models\LeaveRecord::where('employee_id', $employee->id)
-                ->where('leave_configuration_id', $config->id) // ← verify this column name matches your schema
+                ->where('leave_configuration_id', $config->id)
                 ->get();
 
             foreach ($leaveRecords as $rec) {
-                $start = \Carbon\Carbon::parse($rec->start_date);
-                $end   = \Carbon\Carbon::parse($rec->end_date);
+                $start   = \Carbon\Carbon::parse($rec->start_date);
+                $end     = \Carbon\Carbon::parse($rec->end_date);
+                $withPay = (float) $rec->days_taken - (float) $rec->no_pay_days;
 
                 $entries[] = [
                     'sort_date'   => $start,
                     'period'      => $start->format('m-d-y') . ' to ' . $end->format('m-d-y'),
                     'particulars' => $config->name . ' taken',
                     'earned'      => 0,
+                    'abs_wp'      => round($withPay, 3),
+                    'abs_wop'     => round((float) $rec->no_pay_days, 3),
+                    'used'        => round($withPay, 3),
+                ];
+            }
+
+            $monetizations = \App\Models\LeaveMonetization::where('employee_id', $employee->id)
+                ->where('leave_configuration_id', $config->id)
+                ->where('status', 'approved')
+                ->get();
+
+            foreach ($monetizations as $mon) {
+                $date = \Carbon\Carbon::parse($mon->reviewed_at ?? $mon->applied_at);
+
+                $entries[] = [
+                    'sort_date'   => $date,
+                    'period'      => $date->format('m-d-y'),
+                    'particulars' => $config->name . ' monetized',
+                    'earned'      => 0,
                     'abs_wp'      => 0,
                     'abs_wop'     => 0,
-                    'used'        => round((float) $rec->days_taken, 3),
+                    'used'        => round((float) $mon->days_monetized, 3),
                 ];
             }
         }
 
-        // Sort chronologically, then compute running balance
         usort($entries, fn($a, $b) => $a['sort_date'] <=> $b['sort_date']);
 
         $balance = 0;
         foreach ($entries as &$entry) {
             $balance += $entry['earned'] - $entry['used'];
             $entry['balance'] = round($balance, 3);
-            unset($entry['sort_date']); // internal only, not needed in the response
+            unset($entry['sort_date']);
         }
 
         return $entries;
     }
+    // private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type): array
+    // {
+    //     $entries = [];
+
+    //     $attendanceRows = \App\Models\Attendance::where('employee_id', $employee->id)->get();
+
+    //     foreach ($attendanceRows as $row) {
+    //         $earned = $type === 'vl'
+    //             ? $row->vl_earned - $row->tardiness_equivalent_days
+    //             : $row->sl_earned;
+
+    //         $entries[] = [
+    //             'sort_date'   => \Carbon\Carbon::parse("{$row->month} 1, {$row->year}"),
+    //             'period'      => "{$row->month} {$row->year}",
+    //             'particulars' => 'Monthly credit',
+    //             'earned'      => round($earned, 3),
+    //             'abs_wp'      => (float) $row->absent_with_leave_days,
+    //             'abs_wop'     => (float) $row->absent_without_leave_days,
+    //             'used'        => 0,
+    //         ];
+    //     }
+
+    //     if ($config) {
+    //         $leaveRecords = \App\Models\LeaveRecord::where('employee_id', $employee->id)
+    //             ->where('leave_configuration_id', $config->id)
+    //             ->get();
+
+    //         foreach ($leaveRecords as $rec) {
+    //             $start   = \Carbon\Carbon::parse($rec->start_date);
+    //             $end     = \Carbon\Carbon::parse($rec->end_date);
+    //             $withPay = (float) $rec->days_taken - (float) $rec->no_pay_days;
+
+    //             $entries[] = [
+    //                 'sort_date'   => $start,
+    //                 'period'      => $start->format('m-d-y') . ' to ' . $end->format('m-d-y'),
+    //                 'particulars' => $config->name . ' taken',
+    //                 'earned'      => 0,
+    //                 'abs_wp'      => round($withPay, 3),
+    //                 'abs_wop'     => round((float) $rec->no_pay_days, 3),
+    //                 'used'        => round($withPay, 3),
+    //             ];
+    //         }
+
+    //         $monetizations = \App\Models\LeaveMonetization::where('employee_id', $employee->id)
+    //             ->where('leave_configuration_id', $config->id)
+    //             ->where('status', 'approved')
+    //             ->get();
+
+    //         foreach ($monetizations as $mon) {
+    //             $date = \Carbon\Carbon::parse($mon->reviewed_at ?? $mon->applied_at);
+
+    //             $entries[] = [
+    //                 'sort_date'   => $date,
+    //                 'period'      => $date->format('m-d-y'),
+    //                 'particulars' => $config->name . ' monetized',
+    //                 'earned'      => 0,
+    //                 'abs_wp'      => 0,
+    //                 'abs_wop'     => 0,
+    //                 'used'        => round((float) $mon->days_monetized, 3),
+    //             ];
+    //         }
+    //     }
+
+    //     usort($entries, fn($a, $b) => $a['sort_date'] <=> $b['sort_date']);
+
+    //     $balance = 0;
+    //     foreach ($entries as &$entry) {
+    //         $balance += $entry['earned'] - $entry['used'];
+    //         $entry['balance'] = round($balance, 3);
+    //         unset($entry['sort_date']);
+    //     }
+
+    //     return $entries;
+    // }
     public function stepIncrementForecast(Request $request)
     {
         $request->validate([

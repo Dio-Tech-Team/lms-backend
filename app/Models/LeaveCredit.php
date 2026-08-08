@@ -14,6 +14,7 @@ class LeaveCredit extends Model
         'total_credits',
         'used_credits',
         'remaining_balance',
+        'opening_balance',
         'year',
         'last_updated'
     ];
@@ -22,6 +23,7 @@ class LeaveCredit extends Model
         'total_credits' => 'decimal:3',
         'used_credits' => 'decimal:3',
         'remaining_balance' => 'decimal:3',
+        'opening_balance' => 'decimal:3',
         'last_updated' => 'datetime',
     ];
     public $timestamps = true;

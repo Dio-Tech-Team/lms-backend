@@ -242,6 +242,13 @@ class LeaveCreditController extends Controller
         $total = $validated['total_credits'] ?? $credit->total_credits;
         $used = $validated['used_credits'] ?? $credit->used_credits;
 
+        // First-ever manual credit set on an untouched row = treat as the opening balance
+        if (isset($validated['total_credits']) && (float) $credit->used_credits === 0.0 && (float) $credit->opening_balance === 0.0) {
+            $validated['opening_balance'] = $validated['total_credits'];
+        }
+        $total = $validated['total_credits'] ?? $credit->total_credits;
+        $used = $validated['used_credits'] ?? $credit->used_credits;
+
         $validated['remaining_balance'] = max(0, $total - $used);
         $validated['last_updated'] = now();
 
@@ -261,6 +268,7 @@ class LeaveCreditController extends Controller
                 'total_credits',
                 'used_credits',
                 'remaining_balance',
+                'opening_balance',
                 'year',
                 'last_updated'
             ]),
