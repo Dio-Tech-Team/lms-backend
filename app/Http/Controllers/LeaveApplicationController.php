@@ -121,16 +121,41 @@ class LeaveApplicationController extends Controller
             ], 403);
         }
 
-        // Only block duplicates if it's NOT a paper submission
+        // // Only block duplicates if it's NOT a paper submission
+        // if (!$request->boolean('is_paper_submission')) {
+        //     $existing = LeaveApplication::where('employee_id', $employee->id)
+        //         ->where('status', 'pending')
+        //         ->where('start_date', $validated['start_date'])
+        //         ->where('end_date', $validated['end_date'])
+        //         ->exists();
+
+        //     if ($existing) {
+        //         return response()->json(['message' => 'You already have a pending application for these dates.'], 422);
+        //     }
+        // }
+        // Block if pending (any dates)
         if (!$request->boolean('is_paper_submission')) {
-            $existing = LeaveApplication::where('employee_id', $employee->id)
+            $hasPending = LeaveApplication::where('employee_id', $employee->id)
                 ->where('status', 'pending')
-                ->where('start_date', $validated['start_date'])
-                ->where('end_date', $validated['end_date'])
                 ->exists();
 
-            if ($existing) {
-                return response()->json(['message' => 'You already have a pending application for these dates.'], 422);
+            if ($hasPending) {
+                return response()->json([
+                    'message' => 'You already have a pending leave application. Please wait for it to be reviewed or cancel it before filing another.'
+                ], 422);
+            }
+
+            // Block if overlapping an already-approved leave
+            $hasApprovedOverlap = LeaveApplication::where('employee_id', $employee->id)
+                ->where('status', 'approved')
+                ->where('start_date', '<=', $validated['end_date'])
+                ->where('end_date', '>=', $validated['start_date'])
+                ->exists();
+
+            if ($hasApprovedOverlap) {
+                return response()->json([
+                    'message' => 'You already have an approved leave that overlaps with these dates.'
+                ], 422);
             }
         }
         $year = Carbon::parse($validated['start_date'])->year;

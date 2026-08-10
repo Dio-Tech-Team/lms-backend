@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use App\Models\LeaveConfiguration;
 use App\Http\Controllers\LeaveCreditController;
+use App\Models\LeaveApplication;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\Facades\Log;
 use App\Models\ActivityLog;
@@ -61,6 +62,20 @@ class EmployeeController extends Controller
         }
         // Apply pagination
         $employees = $query->paginate(10);
+
+        // Get IDs of employees currently on approved leave — single query, not per-row
+        $onLeaveIds = LeaveApplication::where('status', 'approved')
+            ->whereDate('start_date', '<=', now())
+            ->whereDate('end_date', '>=', now())
+            ->pluck('employee_id')
+            ->toArray();
+
+        // Tag each employee in the paginated collection
+        $employees->getCollection()->transform(function ($employee) use ($onLeaveIds) {
+            $employee->is_on_leave = in_array($employee->id, $onLeaveIds);
+            return $employee;
+        });
+
 
         return response()->json($employees);
     }
@@ -269,6 +284,7 @@ class EmployeeController extends Controller
         $stepIncrementInfo = $this->calculateStepIncrement($employee);
         $loyaltyPayInfo    = $this->calculateLoyaltyPay($employee);
         $retirementInfo    = $this->calculateRetirement($employee);
+        $isOnLeave         = $this->calculateOnLeaveStatus($employee);
 
         return response()->json([
             'id'                             => $employee->id,
@@ -302,6 +318,7 @@ class EmployeeController extends Controller
             'loyalty_pay'                    => $loyaltyPayInfo,
             'retirement'                     => $retirementInfo,
             'is_active'                      => $employee->is_active,
+            'is_on_leave'                    => $isOnLeave,
         ]);
     }
 
@@ -417,59 +434,6 @@ class EmployeeController extends Controller
         $yearsServed = max(0, $baseDate->diffInYears($asOfDate));
         return (int) min(8, floor($yearsServed / 3) + 1);
     }
-    // private function calculateLoyaltyPay($employee)
-    // {
-    //     if ($employee->employment_status !== 'permanent') {
-    //         return [
-    //             'eligible'          => false,
-    //             'message'           => 'Not applicable - employee is not currently permanent',
-    //             'years_served'      => 0,
-    //             'years_until_next'  => null,
-    //             'next_milestone'    => 10,
-    //         ];
-    //     }
-
-    //     $employmentHistory = $employee->relationLoaded('employment_history')
-    //         ? $employee->employment_history
-    //         : $employee->employment_history()->orderBy('effective_date', 'desc')->get();
-
-    //     $earliestPermanent = $employmentHistory
-    //         ->filter(fn($history) => $history->new_employment_status === 'permanent')
-    //         ->sortBy('effective_date')
-    //         ->first();
-
-    //     $startDate = $earliestPermanent
-    //         ? \Carbon\Carbon::parse($earliestPermanent->effective_date)
-    //         : \Carbon\Carbon::parse($employee->date_hired);
-
-    //     $yearsServed = max(0, $startDate->diffInYears(now()));
-
-    //     if ($yearsServed < 10) {
-    //         $yearsUntilFirst = 10 - $yearsServed;
-    //         return [
-    //             'eligible'          => false,
-    //             'since'             => $startDate->format('Y-m-d'),
-    //             'years_served'      => $yearsServed,
-    //             'milestones_received'   => 0, //new added 
-    //             'years_until_next'  => $yearsUntilFirst,
-    //             'next_milestone'    => 10,
-    //         ];
-    //     }
-    //     $yearsAfterFirst = $yearsServed - 10;
-    //     $milestonesPassed = floor($yearsAfterFirst / 5) + 1;
-    //     $nextMilestone = 10 + ($milestonesPassed * 5);
-    //     $yearsUntilNext = $nextMilestone - $yearsServed;
-
-    //     return [
-    //         'eligible'              => true,
-    //         'since'                 => $startDate->format('Y-m-d'),
-    //         'years_served'          => $yearsServed,
-    //         'milestones_received'   => (int) $milestonesPassed,
-    //         'years_until_next'      => $yearsUntilNext,
-    //         'next_milestone'        => $nextMilestone,
-    //     ];
-    // }
-
     private function calculateLoyaltyPay($employee)
     {
         if ($employee->employment_status !== 'permanent') {
@@ -554,6 +518,15 @@ class EmployeeController extends Controller
             'years_remaining'  => $age < 65 ? (65 - $age) : 0,
             'eligible_now'     => $age >= 65,
         ];
+    }
+
+    private function calculateOnLeaveStatus($employee): bool
+    {
+        return \App\Models\LeaveApplication::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', now())
+            ->whereDate('end_date', '>=', now())
+            ->exists();
     }
     public function leaveCard(string $id, Request $request)
     {
@@ -673,80 +646,6 @@ class EmployeeController extends Controller
 
         return $entries;
     }
-    // private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type): array
-    // {
-    //     $entries = [];
-
-    //     $attendanceRows = \App\Models\Attendance::where('employee_id', $employee->id)->get();
-
-    //     foreach ($attendanceRows as $row) {
-    //         $earned = $type === 'vl'
-    //             ? $row->vl_earned - $row->tardiness_equivalent_days
-    //             : $row->sl_earned;
-
-    //         $entries[] = [
-    //             'sort_date'   => \Carbon\Carbon::parse("{$row->month} 1, {$row->year}"),
-    //             'period'      => "{$row->month} {$row->year}",
-    //             'particulars' => 'Monthly credit',
-    //             'earned'      => round($earned, 3),
-    //             'abs_wp'      => (float) $row->absent_with_leave_days,
-    //             'abs_wop'     => (float) $row->absent_without_leave_days,
-    //             'used'        => 0,
-    //         ];
-    //     }
-
-    //     if ($config) {
-    //         $leaveRecords = \App\Models\LeaveRecord::where('employee_id', $employee->id)
-    //             ->where('leave_configuration_id', $config->id)
-    //             ->get();
-
-    //         foreach ($leaveRecords as $rec) {
-    //             $start   = \Carbon\Carbon::parse($rec->start_date);
-    //             $end     = \Carbon\Carbon::parse($rec->end_date);
-    //             $withPay = (float) $rec->days_taken - (float) $rec->no_pay_days;
-
-    //             $entries[] = [
-    //                 'sort_date'   => $start,
-    //                 'period'      => $start->format('m-d-y') . ' to ' . $end->format('m-d-y'),
-    //                 'particulars' => $config->name . ' taken',
-    //                 'earned'      => 0,
-    //                 'abs_wp'      => round($withPay, 3),
-    //                 'abs_wop'     => round((float) $rec->no_pay_days, 3),
-    //                 'used'        => round($withPay, 3),
-    //             ];
-    //         }
-
-    //         $monetizations = \App\Models\LeaveMonetization::where('employee_id', $employee->id)
-    //             ->where('leave_configuration_id', $config->id)
-    //             ->where('status', 'approved')
-    //             ->get();
-
-    //         foreach ($monetizations as $mon) {
-    //             $date = \Carbon\Carbon::parse($mon->reviewed_at ?? $mon->applied_at);
-
-    //             $entries[] = [
-    //                 'sort_date'   => $date,
-    //                 'period'      => $date->format('m-d-y'),
-    //                 'particulars' => $config->name . ' monetized',
-    //                 'earned'      => 0,
-    //                 'abs_wp'      => 0,
-    //                 'abs_wop'     => 0,
-    //                 'used'        => round((float) $mon->days_monetized, 3),
-    //             ];
-    //         }
-    //     }
-
-    //     usort($entries, fn($a, $b) => $a['sort_date'] <=> $b['sort_date']);
-
-    //     $balance = 0;
-    //     foreach ($entries as &$entry) {
-    //         $balance += $entry['earned'] - $entry['used'];
-    //         $entry['balance'] = round($balance, 3);
-    //         unset($entry['sort_date']);
-    //     }
-
-    //     return $entries;
-    // }
     public function stepIncrementForecast(Request $request)
     {
         $request->validate([
@@ -798,32 +697,6 @@ class EmployeeController extends Controller
                 ];
             }
         }
-
-        //     $totalYearsAtForecast = $forecastYear - $baseDate->year;
-
-        //     if ($totalYearsAtForecast > 0 && $totalYearsAtForecast % 3 === 0) {
-        //         $currentStep = (int)(($totalYearsAtForecast - 3) / 3) + 1;
-        //         $nextStep = $currentStep + 1;
-
-        //         $currentStepDisplay = min(max($currentStep, 1), 7);
-        //         $nextStepDisplay = min($nextStep, 8);
-        //         $nextStepDate = Carbon::create(
-        //             $forecastYear,
-        //             $baseDate->month,
-        //             $baseDate->day
-        //         )->format('Y-m-d');
-
-        //         $forecastRecords[] = [
-        //             'employee_id'    => $employee->id,
-        //             'name'           => "{$employee->first_name} {$employee->surname}",
-        //             'position'       => $employee->position,
-        //             'department'     => $employee->department?->name ?? 'Unassigned',
-        //             'current_step'   => $currentStepDisplay,
-        //             'next_step'      => $nextStepDisplay,
-        //             'next_step_date' => $nextStepDate,
-        //         ];
-        //     }
-        // }
 
         return response()->json([
             'year'      => $forecastYear,

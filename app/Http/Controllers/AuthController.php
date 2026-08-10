@@ -19,6 +19,7 @@ class AuthController extends Controller
 
         $user = User::select('id', 'username', 'email', 'password', 'role')
             ->where('email', $credentials['email'])
+            ->with('employee:id,user_id')
             ->first();
         // $user = User::where('email', $credentials['email'])->first();
 
@@ -38,7 +39,8 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'username' => $user->username,
                 'email' => $user->email,
-                'role' => $user->role
+                'role' => $user->role,
+                'employee_id' => $user->employee ? $user->employee->id : null,
             ]
 
         ]);
@@ -80,6 +82,7 @@ class AuthController extends Controller
             'username' => $user->username,
             'email'    => $user->email,
             'role'     => $user->role,
+            'employee_id' => $user->employee ? $user->employee->id : null,
         ]);
     }
 }
