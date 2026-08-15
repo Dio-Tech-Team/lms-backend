@@ -40,7 +40,8 @@ class EmploymentHistoryController extends Controller
         // Validate all fields present in your updated migration
         $request->validate([
             'previous_position'          => 'nullable|string|max:255',
-            'new_position'               => 'required|string|max:255',
+            // 'new_position'               => 'required|string|max:255',
+            'new_position' => 'required|string|max:255|exists:positions,title',
             'previous_employment_status' => 'nullable|in:permanent,casual,elected,job_order,resigned',
             'new_employment_status'      => 'required|in:permanent,casual,elected,job_order,resigned',
             'effective_date'             => 'required|date',

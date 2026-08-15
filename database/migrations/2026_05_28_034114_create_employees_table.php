@@ -29,7 +29,7 @@ return new class extends Migration
             $table->string('height')->nullable();
             $table->string('weight')->nullable();
             $table->string('bloodtype')->nullable();
-            $table->enum('highest_educational_attainment', ['elementary', 'secondary', 'vocational', 'college', 'graduated']);
+            $table->enum('highest_educational_attainment', ['elementary', 'secondary', 'vocational', 'college', 'graduate']);
 
             // Contact & Address
             $table->string('residential_address')->nullable();

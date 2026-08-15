@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,
             LeaveConfigurationSeeder::class,
             EmployeeSeeder::class,
+            HolidaySeeder::class,
+            PositionSeeder::class,
         ]);
     }
     //  // User::factory(10)->create();  

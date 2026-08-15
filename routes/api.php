@@ -15,7 +15,9 @@ use App\Http\Controllers\{
     UserController,
     ActivityLogController,
     DashboardController,
-    LeaveMonetizationController
+    LeaveMonetizationController,
+    HolidayController,
+    PositionController,
 };
 
 Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
@@ -46,6 +48,8 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('departments', [DepartmentController::class, 'index']);
     Route::get('departments/{id}', [DepartmentController::class, 'show']);
 
+
+    Route::get('positions', [PositionController::class, 'index']);
     //mobile
     Route::get('/dashboard/balances', [LeaveCreditController::class, 'getLeaveCreditBalances']);
 
@@ -128,6 +132,14 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('departments', [DepartmentController::class, 'store']);
         Route::put('departments/{id}', [DepartmentController::class, 'update']);
         Route::delete('departments/{id}', [DepartmentController::class, 'destroy']);
+
+        Route::get('/holidays', [HolidayController::class, 'index']);
+        Route::post('/holidays', [HolidayController::class, 'store']);
+        Route::put('/holidays/{id}', [HolidayController::class, 'update']);
+        Route::delete('/holidays/{id}', [HolidayController::class, 'destroy']);
+
+        Route::post('/positions', [PositionController::class, 'store']);
+        Route::put('/positions/{id}', [PositionController::class, 'update']);
 
         // NEW — Activity Logs
         Route::get('/activity-logs/actions', [ActivityLogController::class, 'actions']);

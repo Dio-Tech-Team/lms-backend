@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
 use App\Models\ActivityLog;
+use App\Models\Holiday;
 
 class LeaveApplicationController extends Controller
 {
@@ -35,6 +36,7 @@ class LeaveApplicationController extends Controller
             'leave_applications.status',
             'leave_applications.applied_at',
             'leave_applications.reviewed_at',
+            'leave_applications.rejection_reason',
             'leave_applications.reviewed_by',
             'employees.first_name',
             'employees.surname',
@@ -89,6 +91,15 @@ class LeaveApplicationController extends Controller
             'is_paper_submission'    => 'nullable|boolean',
         ]);
 
+        // Backend is the source of truth for days_applied — ignore whatever the client sent
+        $validated['days_applied'] = $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
+
+        if ($validated['days_applied'] < 0.5) {
+            return response()->json([
+                'message' => 'The selected date range contains no working days.'
+            ], 422);
+        }
+
         $user = $request->user();
         $config = LeaveConfiguration::findOrFail($request->leave_configuration_id);
 
@@ -120,19 +131,6 @@ class LeaveApplicationController extends Controller
                 'message' => 'Unauthorized: Job Order personnel are only eligible for Wellness Leave.'
             ], 403);
         }
-
-        // // Only block duplicates if it's NOT a paper submission
-        // if (!$request->boolean('is_paper_submission')) {
-        //     $existing = LeaveApplication::where('employee_id', $employee->id)
-        //         ->where('status', 'pending')
-        //         ->where('start_date', $validated['start_date'])
-        //         ->where('end_date', $validated['end_date'])
-        //         ->exists();
-
-        //     if ($existing) {
-        //         return response()->json(['message' => 'You already have a pending application for these dates.'], 422);
-        //     }
-        // }
         // Block if pending (any dates)
         if (!$request->boolean('is_paper_submission')) {
             $hasPending = LeaveApplication::where('employee_id', $employee->id)
@@ -218,7 +216,8 @@ class LeaveApplicationController extends Controller
             ->first();
 
         // 2. Choose Workflow Route
-        if ($request->boolean('is_paper_submission')) {
+        $isAdminFiling = $this->isAdmin($user) && $request->filled('employee_id');
+        if ($request->boolean('is_paper_submission') || $isAdminFiling) {
             $application = DB::transaction(function () use ($employee, $validated,  $deductionCredit, $request, $config) {
                 $app = LeaveApplication::create([
                     'employee_id'            => $employee->id,
@@ -291,9 +290,12 @@ class LeaveApplicationController extends Controller
                 ->lockForUpdate()
                 ->first();
 
+            $correctDays = $this->calculateWorkingDays($application->start_date, $application->end_date);
+
             // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
             if (in_array($config->code, ['WL', 'SPL', 'FL'])) {
-                if (!$credit || $credit->remaining_balance < $application->days_applied) {
+                // if (!$credit || $credit->remaining_balance < $application->days_applied) {
+                if (!$credit || $credit->remaining_balance < $correctDays) {
                     return ['error' => 'Insufficient balance for ' . $config->name];
                 }
             }
@@ -304,7 +306,8 @@ class LeaveApplicationController extends Controller
                 'reviewed_at' => now(),
             ]);
 
-            $noPayDays = $credit ? $credit->deductLeave((float) $application->days_applied) : (float) $application->days_applied;
+            // $noPayDays = $credit ? $credit->deductLeave((float) $application->days_applied) : (float) $application->days_applied;
+            $noPayDays = $credit ? $credit->deductLeave($correctDays) : $correctDays;
 
             LeaveRecord::create([
                 'employee_id'            => $application->employee_id,
@@ -312,7 +315,8 @@ class LeaveApplicationController extends Controller
                 'recorded_by'            => $request->user()->id,
                 'start_date'             => $application->start_date,
                 'end_date'               => $application->end_date,
-                'days_taken'             => $application->days_applied,
+                'days_taken'             => $correctDays,
+                // 'days_taken'             => $application->days_applied,
                 'no_pay_days'            => $noPayDays,
                 'remarks'                => $noPayDays > 0
                     ? "Approved. {$noPayDays} day(s) Leave Without Pay."
@@ -338,6 +342,11 @@ class LeaveApplicationController extends Controller
     }
     public function reject(Request $request, $id)
     {
+
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|max:1000',
+        ]);
+
         $application = LeaveApplication::findOrFail($id);
 
         if ($application->status !== 'pending') {
@@ -350,12 +359,13 @@ class LeaveApplicationController extends Controller
             'status'      => 'rejected',
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
+            'rejection_reason'  => $validated['rejection_reason'],
         ]);
 
         ActivityLog::create([
             'user_id'      => $request->user()->id,
             'action'       => 'leave_application.rejected',
-            'description'  => "Rejected leave application #{$application->id}",
+            'description'  => "Rejected leave application #{$application->id}: {$validated['rejection_reason']}",
             'subject_type' => 'LeaveApplication',
             'subject_id'   => $application->id,
         ]);
@@ -416,6 +426,8 @@ class LeaveApplicationController extends Controller
             'leave_applications.status',
             'leave_applications.applied_at',
             'leave_applications.reviewed_at',
+            'leave_applications.reviewed_by',
+            'leave_applications.rejection_reason',
             'employees.first_name',
             'employees.surname',
             'leave_configurations.name as leave_type_name',
@@ -435,6 +447,67 @@ class LeaveApplicationController extends Controller
         return response()->json($application);
     }
 
+    // private function calculateWorkingDays(string $startDate, string $endDate): float
+    // {
+    //     $start = Carbon::parse($startDate);
+    //     $end = Carbon::parse($endDate);
+
+    //     $holidayDates = Holiday::whereBetween('date', [$start->toDateString(), $end->toDateString()])
+    //         ->pluck('date')
+    //         ->map(fn($d) => $d->toDateString())
+    //         ->toArray();
+
+    //     $count = 0;
+    //     $current = $start->copy();
+
+    //     while ($current->lte($end)) {
+    //         $isWeekend = $current->isWeekend();
+    //         $isHoliday = in_array($current->toDateString(), $holidayDates);
+
+    //         if (!$isWeekend && !$isHoliday) {
+    //             $count++;
+    //         }
+
+    //         $current->addDay();
+    //     }
+
+    //     return $count;
+    // }
+
+    private function calculateWorkingDays(string $startDate, string $endDate): float
+    {
+        $start = Carbon::parse($startDate);
+        $end = Carbon::parse($endDate);
+
+        $holidayDates = Holiday::whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->pluck('date')
+            ->map(fn($d) => $d->toDateString())
+            ->toArray();
+
+        // Only Monday–Thursday are working days for this agency
+        $workingDaysOfWeek = [
+            Carbon::MONDAY,
+            Carbon::TUESDAY,
+            Carbon::WEDNESDAY,
+            Carbon::THURSDAY,
+        ];
+
+        $count = 0;
+        $current = $start->copy();
+
+        while ($current->lte($end)) {
+            $isWorkingDayOfWeek = in_array($current->dayOfWeek, $workingDaysOfWeek);
+            $isHoliday = in_array($current->toDateString(), $holidayDates);
+
+            if ($isWorkingDayOfWeek && !$isHoliday) {
+                $count++;
+            }
+
+            $current->addDay();
+        }
+
+        return $count;
+    }
     public function generatePdf(Request $request, $id)
     {
         $application = LeaveApplication::with([
@@ -457,13 +530,6 @@ class LeaveApplicationController extends Controller
             ->whereIn('code', ['VL', 'SL'])
             ->get()
             ->keyBy('code');
-
-        // $credits = LeaveCredit::select(['leave_configuration_id', 'total_credits', 'remaining_balance'])
-        //     ->where('employee_id', $application->employee_id)
-        //     ->whereIn('leave_configuration_id', $configs->pluck('id'))
-        //     ->where('year', now()->year)
-        //     ->get()
-        //     ->keyBy('leave_configuration_id');
         $year = Carbon::parse($application->start_date)->year;
 
         $credits = LeaveCredit::select(['leave_configuration_id', 'total_credits', 'remaining_balance'])
@@ -478,15 +544,31 @@ class LeaveApplicationController extends Controller
         $vlCredit  = $credits->get($vlId);
         $slCredit  = $credits->get($slId);
 
+        // --- PROJECTED BALANCES FOR THE PDF ONLY {{NEW}} ---
+        $vlBalance = $vlCredit?->remaining_balance ?? 0;
+        $slBalance = $slCredit?->remaining_balance ?? 0;
+
+
+        // If the application is still pending, preview the deduction on the form based on type {{NEW}}
+        if ($application->status === 'pending') {
+            $days = (float) $application->days_applied;
+
+            if ($code === 'VL' || $code === 'FL') {
+                $vlBalance = max(0, $vlBalance - $days);
+            } elseif ($code === 'SL') {
+                $slBalance = max(0, $slBalance - $days);
+            }
+        }
+        // -------------------------------------------
+
         $data = [
             'application' => $application,
             'code'        => $code,
-            'vl_total'    => $vlCredit->total_credits ?? 0,
-            'vl_balance'  => $vlCredit->remaining_balance ?? 0,
 
-
-            'sl_total'    => $slCredit->total_credits ?? 0,
-            'sl_balance'  => $slCredit->remaining_balance ?? 0,
+            'vl_total'    => number_format($vlCredit->total_credits ?? 0, 3, '.', ''),
+            'vl_balance'  => number_format($vlBalance, 3, '.', ''),
+            'sl_total'    => number_format($slCredit->total_credits ?? 0, 3, '.', ''),
+            'sl_balance'  => number_format($slBalance, 3, '.', ''),
         ];
 
         $pdf = Pdf::loadView('pdf.leave-application', $data);

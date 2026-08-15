@@ -36,6 +36,7 @@ class EmployeeController extends Controller
             'employees.date_hired',
             'employees.is_active',
             'users.username',
+            'employees.sex',
             'users.email',
             'departments.name as department_name',
         ])
@@ -52,6 +53,10 @@ class EmployeeController extends Controller
             $query->where('employees.department_id', $request->department_id);
         }
 
+        if ($request->filled('sex')) {
+            $query->where('employees.sex', $request->sex);
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -61,7 +66,10 @@ class EmployeeController extends Controller
             });
         }
         // Apply pagination
+        $query->orderBy('employees.surname')
+            ->orderBy('employees.first_name');
         $employees = $query->paginate(10);
+
 
         // Get IDs of employees currently on approved leave — single query, not per-row
         $onLeaveIds = LeaveApplication::where('status', 'approved')
@@ -124,7 +132,7 @@ class EmployeeController extends Controller
             'height'                           => 'nullable|string',
             'weight'                           => 'nullable|string',
             'bloodtype'                        => 'nullable|string',
-            'highest_educational_attainment'   => 'required|in:elementary,secondary,vocational,college,graduated',
+            'highest_educational_attainment'   => 'required|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
             'contact_number'                   => 'nullable|string',
             'umid_id'                          => 'nullable|string',
@@ -133,7 +141,8 @@ class EmployeeController extends Controller
             'psn_number'                       => 'nullable|string',
             'tin_number'                       => 'nullable|string',
             'employment_status'                => 'required|in:permanent,casual,elected,job_order,resigned',
-            'position'                         => 'required|string',
+            // 'position'                         => 'required|string',
+            'position' => 'required|string|exists:positions,title',
             'department_id'                    => 'required|exists:departments,id',
             'date_hired'                       => 'required|date',
         ]);
@@ -344,7 +353,7 @@ class EmployeeController extends Controller
             'height'                           => 'nullable|string',
             'weight'                           => 'nullable|string',
             'bloodtype'                        => 'nullable|string',
-            'highest_educational_attainment'   => 'sometimes|in:elementary,secondary,vocational,college,graduated',
+            'highest_educational_attainment'   => 'sometimes|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
             'contact_number'                   => 'nullable|string',
             'umid_id'                          => 'nullable|string',
@@ -353,7 +362,8 @@ class EmployeeController extends Controller
             'psn_number'                       => 'nullable|string',
             'tin_number'                       => 'nullable|string',
             'department_id'                    => 'sometimes|exists:departments,id',
-            'position'                         => 'sometimes|string',
+            // 'position'                         => 'sometimes|string',
+            'position' => 'sometimes|string|exists:positions,title',
             // 'employment_status'                => 'sometimes|in:permanent,casual,elected,job_order',
             'date_hired'                       => 'sometimes|date',
         ]);
@@ -553,6 +563,100 @@ class EmployeeController extends Controller
         ]);
     }
 
+    // private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type): array
+    // {
+    //     $entries = [];
+
+    //     if ($config) {
+    //         $credit = \App\Models\LeaveCredit::where('employee_id', $employee->id)
+    //             ->where('leave_configuration_id', $config->id)
+    //             ->where('year', now()->year)
+    //             ->first();
+
+    //         if ($credit && (float) $credit->opening_balance > 0) {
+    //             $entries[] = [
+    //                 'sort_date'   => \Carbon\Carbon::parse($employee->date_hired)->subDay(),
+    //                 'period'      => 'Opening Balance',
+    //                 'particulars' => 'Transferred from physical leave card',
+    //                 'earned'      => round((float) $credit->opening_balance, 3),
+    //                 'abs_wp'      => 0,
+    //                 'abs_wop'     => 0,
+    //                 'used'        => 0,
+    //             ];
+    //         }
+    //     }
+
+    //     $attendanceRows = \App\Models\Attendance::where('employee_id', $employee->id)->get();
+
+    //     foreach ($attendanceRows as $row) {
+    //         $earned = $type === 'vl'
+    //             ? $row->vl_earned - $row->tardiness_equivalent_days
+    //             : $row->sl_earned;
+
+    //         $entries[] = [
+    //             'sort_date'   => \Carbon\Carbon::parse("{$row->month} 1, {$row->year}"),
+    //             'period'      => "{$row->month} {$row->year}",
+    //             'particulars' => 'Monthly credit',
+    //             'earned'      => round($earned, 3),
+    //             'abs_wp'      => (float) $row->absent_with_leave_days,
+    //             'abs_wop'     => (float) $row->absent_without_leave_days,
+    //             'used'        => 0,
+    //         ];
+    //     }
+
+    //     if ($config) {
+    //         $leaveRecords = \App\Models\LeaveRecord::where('employee_id', $employee->id)
+    //             ->where('leave_configuration_id', $config->id)
+    //             ->get();
+
+    //         foreach ($leaveRecords as $rec) {
+    //             $start   = \Carbon\Carbon::parse($rec->start_date);
+    //             $end     = \Carbon\Carbon::parse($rec->end_date);
+    //             $withPay = (float) $rec->days_taken - (float) $rec->no_pay_days;
+
+    //             $entries[] = [
+    //                 'sort_date'   => $start,
+    //                 'period'      => $start->format('m-d-y') . ' to ' . $end->format('m-d-y'),
+    //                 'particulars' => $config->name . ' taken',
+    //                 'earned'      => 0,
+    //                 'abs_wp'      => round($withPay, 3),
+    //                 'abs_wop'     => round((float) $rec->no_pay_days, 3),
+    //                 'used'        => round($withPay, 3),
+    //             ];
+    //         }
+
+    //         $monetizations = \App\Models\LeaveMonetization::where('employee_id', $employee->id)
+    //             ->where('leave_configuration_id', $config->id)
+    //             ->where('status', 'approved')
+    //             ->get();
+
+    //         foreach ($monetizations as $mon) {
+    //             $date = \Carbon\Carbon::parse($mon->reviewed_at ?? $mon->applied_at);
+
+    //             $entries[] = [
+    //                 'sort_date'   => $date,
+    //                 'period'      => $date->format('m-d-y'),
+    //                 'particulars' => $config->name . ' monetized',
+    //                 'earned'      => 0,
+    //                 'abs_wp'      => 0,
+    //                 'abs_wop'     => 0,
+    //                 'used'        => round((float) $mon->days_monetized, 3),
+    //             ];
+    //         }
+    //     }
+
+    //     usort($entries, fn($a, $b) => $a['sort_date'] <=> $b['sort_date']);
+
+    //     $balance = 0;
+    //     foreach ($entries as &$entry) {
+    //         $balance += $entry['earned'] - $entry['used'];
+    //         $entry['balance'] = round($balance, 3);
+    //         unset($entry['sort_date']);
+    //     }
+
+    //     return $entries;
+    // }
+
     private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type): array
     {
         $entries = [];
@@ -573,6 +677,39 @@ class EmployeeController extends Controller
                     'abs_wop'     => 0,
                     'used'        => 0,
                 ];
+            }
+
+            // Balance Correction line — surfaces when total_credits has been manually
+            // adjusted after the opening balance was first set (opening_balance itself
+            // is never overwritten, so this delta only appears when they diverge)
+            if ($credit && (float) $credit->opening_balance > 0) {
+                $delta = round((float) $credit->total_credits - (float) $credit->opening_balance, 3);
+
+                if ($delta !== 0.0) {
+                    $correctionLog = \App\Models\ActivityLog::where('subject_type', 'LeaveCredit')
+                        ->where('subject_id', $credit->id)
+                        ->where('action', 'leave_credit.updated')
+                        ->orderByDesc('created_at')
+                        ->with('user:id,username')
+                        ->first();
+
+                    $correctionDate = $correctionLog
+                        ? \Carbon\Carbon::parse($correctionLog->created_at)
+                        : \Carbon\Carbon::parse($credit->last_updated ?? now());
+
+                    $actor = $correctionLog?->user?->username ?? 'HR Admin';
+
+                    $entries[] = [
+                        'sort_date'   => $correctionDate,
+                        'period'      => $correctionDate->format('m-d-y'),
+                        'particulars' => "Balance correction by {$actor}"
+                            . ($delta > 0 ? ' (increase)' : ' (decrease)'),
+                        'earned'      => $delta > 0 ? $delta : 0,
+                        'abs_wp'      => 0,
+                        'abs_wop'     => 0,
+                        'used'        => $delta < 0 ? abs($delta) : 0,
+                    ];
+                }
             }
         }
 
@@ -759,7 +896,8 @@ class EmployeeController extends Controller
 
         $request->validate([
             'employment_status' => 'required|in:permanent,casual,elected,job_order',
-            'position'           => 'required|string',
+            // 'position'           => 'required|string',
+            'position' => 'required|string|exists:positions,title',
             'department_id'      => 'sometimes|exists:departments,id',
             'effective_date'     => 'required|date',
             'remarks'            => 'nullable|string',
