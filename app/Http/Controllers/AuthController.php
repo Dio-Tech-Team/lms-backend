@@ -6,26 +6,26 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
     public function login(Request $request)
     {
-
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'login' => ['required', 'string'], // username or email
             'password' => ['required'],
         ]);
 
-        $user = User::select('id', 'username', 'email', 'password', 'role')
-            ->where('email', $credentials['email'])
+        $user = User::select('id', 'username', 'email', 'password', 'role', 'must_change_password')
+            ->where('username', $credentials['login'])
+            ->orWhere('email', $credentials['login'])
             ->with('employee:id,user_id')
             ->first();
-        // $user = User::where('email', $credentials['email'])->first();
 
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'login' => ['The provided credentials are incorrect.'],
             ]);
         }
 
@@ -41,8 +41,8 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'role' => $user->role,
                 'employee_id' => $user->employee ? $user->employee->id : null,
+                'must_change_password' => $user->must_change_password,
             ]
-
         ]);
     }
     // public function resendVerification(Request $request)
@@ -59,6 +59,29 @@ class AuthController extends Controller
 
     //     return response()->json(['message' => 'Verification link sent!']);
     // }
+
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => ['required'],
+            'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
+        ]);
+
+        $user = $request->user();
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['The current password is incorrect.'],
+            ]);
+        }
+
+        $user->update([
+            'password' => Hash::make($request->password),
+            'must_change_password' => false,
+        ]);
+
+        return response()->json(['message' => 'Password changed successfully.']);
+    }
 
     public function logout(Request $request)
     {
@@ -83,6 +106,7 @@ class AuthController extends Controller
             'email'    => $user->email,
             'role'     => $user->role,
             'employee_id' => $user->employee ? $user->employee->id : null,
+            'must_change_password' => $user->must_change_password,
         ]);
     }
 }

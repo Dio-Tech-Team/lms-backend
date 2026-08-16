@@ -43,7 +43,8 @@ return new class extends Migration
             $table->string('tin_number')->nullable();
 
             // Employment Information
-            $table->enum('employment_status', ['permanent', 'casual', 'elected', 'job_order', 'resigned']);
+            $table->enum('employment_status', ['permanent', 'casual', 'elected', 'job_order', 'resigned', 'retired']);
+            $table->enum('retirement_type', ['mandatory', 'optional'])->nullable();
             $table->string('position');
             $table->date('date_hired');
             // $table->boolean('is_active')->default(true);

@@ -119,8 +119,9 @@ class EmployeeController extends Controller
 
         $request->validate([
             'username'                        => 'required|string|unique:users,username',
-            'email'                            => 'required|string|email|unique:users,email',
-            'password'                         => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
+            // 'email'                            => 'required|string|email|unique:users,email',
+            'email'                            => 'nullable|string|email|unique:users,email',
+            // 'password'                         => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
             'first_name'                       => 'required|string',
             'middle_name'                      => 'nullable|string',
             'surname'                          => 'required|string',
@@ -152,17 +153,24 @@ class EmployeeController extends Controller
         if (!$admin || $admin->role !== 'super_admin') {
             return response()->json(['message' => 'Forbidden'], 403);
         }
-
         $employee = DB::transaction(function () use ($request) {
+            $defaultPassword = $request->id_number;
+
             $user = User::create([
                 'username' => $request->username,
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
+                'email' => $request->email, // nullable now — no placeholder fallback
+                'password' => Hash::make($defaultPassword),
                 'role' => 'employee',
+                'must_change_password' => true,
             ]);
 
-            // event(new Registered($user));
-
+            // $employee = DB::transaction(function () use ($request) {
+            //     $user = User::create([
+            //         'username' => $request->username,
+            //         'email' => $request->email,
+            //         'password' => Hash::make($request->password),
+            //         'role' => 'employee',
+            //     ]);
 
             $employee = Employee::create([
                 'user_id'                          => $user->id,
@@ -230,6 +238,9 @@ class EmployeeController extends Controller
         return response()->json([
             'message' => 'Employee created successfully',
             'employee' => $employee,
+            'user' => $employee->user,
+            // 'user' => $employee->user()->select('username', 'email')->first(),
+            'default_password' => $request->id_number,
         ], 201);
     }
 
@@ -886,7 +897,67 @@ class EmployeeController extends Controller
 
         return response()->json(['message' => 'Employee marked as resigned successfully']);
     }
+    public function retire(Request $request, string $id)
+    {
+        $user = $request->user();
+        if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
 
+        $request->validate([
+            'retirement_type' => 'required|in:mandatory,optional',
+            'effective_date'  => 'required|date',
+            'remarks'         => 'nullable|string',
+        ]);
+
+        $employee = Employee::findOrFail($id);
+
+        if ($employee->employment_status === 'retired') {
+            return response()->json(['message' => 'Employee is already marked as retired'], 422);
+        }
+
+        // Mandatory retirement is age-gated per CSC rules; optional has no age
+        // restriction (agency confirmed employees may retire anytime)
+        if ($request->retirement_type === 'mandatory') {
+            if (!$employee->birthdate) {
+                return response()->json(['message' => 'Cannot process mandatory retirement — employee has no birthdate on record'], 422);
+            }
+
+            $age = \Carbon\Carbon::parse($employee->birthdate)->age;
+            if ($age < 65) {
+                return response()->json(['message' => 'Employee is not yet 65 — mandatory retirement is not applicable'], 422);
+            }
+        }
+
+        DB::transaction(function () use ($employee, $request, $user) {
+            EmploymentHistory::create([
+                'employee_id'                 => $employee->id,
+                'previous_position'           => $employee->position,
+                'new_position'                => $employee->position,
+                'previous_employment_status'  => $employee->employment_status,
+                'new_employment_status'       => 'retired',
+                'effective_date'              => $request->effective_date,
+                'remarks'                     => $request->remarks
+                    ?? ucfirst($request->retirement_type) . ' retirement',
+            ]);
+
+            $employee->update([
+                'employment_status' => 'retired',
+                'retirement_type'   => $request->retirement_type,
+                'is_active'          => false,
+            ]);
+
+            ActivityLog::create([
+                'user_id'      => $user->id,
+                'action'       => 'employee.retired',
+                'description'  => "Marked {$employee->first_name} {$employee->surname} as {$request->retirement_type} retirement effective {$request->effective_date}",
+                'subject_type' => 'Employee',
+                'subject_id'   => $employee->id,
+            ]);
+        });
+
+        return response()->json(['message' => 'Employee marked as retired successfully']);
+    }
     public function rehire(Request $request, string $id)
     {
         $user = $request->user();

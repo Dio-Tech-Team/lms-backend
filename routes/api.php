@@ -35,6 +35,7 @@ Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login
 Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::post('/change-password', [AuthController::class, 'changePassword']);
 
     // --- Employee & Department Management ---
     // Open to all authenticated users — ownership/role filtering handled inside the controller
@@ -79,6 +80,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
         Route::post('employees/{id}/resign', [EmployeeController::class, 'resign']);
         Route::post('employees/{id}/rehire', [EmployeeController::class, 'rehire']);
+        Route::post('/employees/{id}/retire', [EmployeeController::class, 'retire']);
         // Leave Application Admin Actions
         Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
         Route::post('leave-applications/{id}/reject', [LeaveApplicationController::class, 'reject']);

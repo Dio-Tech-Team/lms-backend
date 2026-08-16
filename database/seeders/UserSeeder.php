@@ -26,6 +26,7 @@ class UserSeeder extends Seeder
                 'email'    => 'superadmin@gmail.com',
                 'password' => Hash::make('@Password123'),
                 'role'     => 'super_admin',
+                'must_change_password' => true,
             ]
         );
 
@@ -35,6 +36,7 @@ class UserSeeder extends Seeder
                 'email' => 'hradmin@gmail.com',
                 'password' => Hash::make('@Password123'),
                 'role' => 'hr_admin',
+                'must_change_password' => false,
                 // 'email_verified_at' => now() // Add this line
             ]
         );
@@ -100,7 +102,8 @@ class UserSeeder extends Seeder
                 [
                     'email' => $username . '@gmail.com',
                     'password' => Hash::make('@Password123'),
-                    'role' => 'employee'
+                    'role' => 'employee',
+                    'must_change_password' => false,
                 ]
             );
         }
