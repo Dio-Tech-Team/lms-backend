@@ -101,6 +101,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::prefix('employees/{employeeId}/promotions')->group(function () {
             Route::get('/', [EmploymentHistoryController::class, 'index']);
             Route::post('/', [EmploymentHistoryController::class, 'store']);
+            Route::put('/{promotionId}', [EmploymentHistoryController::class, 'update']);
             Route::delete('/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
         });
 

@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 use App\Models\LeaveConfiguration;
 use App\Http\Controllers\LeaveCreditController;
 use App\Models\LeaveApplication;
+use App\Models\LeaveRecord;
+use App\Models\Attendance;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\Facades\Log;
 use App\Models\ActivityLog;
@@ -331,6 +333,7 @@ class EmployeeController extends Controller
             'tin_number'                     => $employee->tin_number,
             'employment_status'              => $employee->employment_status,
             'position'                       => $employee->position,
+            'department_id'                  => $employee->department_id,
             'department'                     => $employee->department_name,
             'date_hired'                     => $employee->date_hired,
             'employment_history'             => $employee->employment_history,
@@ -373,15 +376,23 @@ class EmployeeController extends Controller
             'psn_number'                       => 'nullable|string',
             'tin_number'                       => 'nullable|string',
             'department_id'                    => 'sometimes|exists:departments,id',
-            // 'position'                         => 'sometimes|string',
             'position' => 'sometimes|string|exists:positions,title',
-            // 'employment_status'                => 'sometimes|in:permanent,casual,elected,job_order',
             'date_hired'                       => 'sometimes|date',
+            // 'email'                            => 'nullable|email|unique:users,email,' . $employee->user_id,
         ]);
+
+        // // Separate email out before updating Employee fields
+        // $email = $validated['email'] ?? null;
+        // unset($validated['email']);
 
         // $employee = Employee::findOrFail($id);
         $employee->update($validated);
 
+
+        // // NEW — update email on the related User record, if provided
+        // if (array_key_exists('email', $request->all())) {
+        //     $employee->user()->update(['email' => $email]);
+        // }
 
         // NEW — log the update
         ActivityLog::create([
@@ -543,7 +554,7 @@ class EmployeeController extends Controller
 
     private function calculateOnLeaveStatus($employee): bool
     {
-        return \App\Models\LeaveApplication::where('employee_id', $employee->id)
+        return LeaveApplication::where('employee_id', $employee->id)
             ->where('status', 'approved')
             ->whereDate('start_date', '<=', now())
             ->whereDate('end_date', '>=', now())
@@ -573,7 +584,6 @@ class EmployeeController extends Controller
             'sick_leave'     => $this->buildLeaveCardForType($employee, $slConfig, 'sl'),
         ]);
     }
-
     // private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type): array
     // {
     //     $entries = [];
@@ -585,9 +595,10 @@ class EmployeeController extends Controller
     //             ->first();
 
     //         if ($credit && (float) $credit->opening_balance > 0) {
+    //             $openingDate = \Carbon\Carbon::parse($employee->date_hired)->subDay();
     //             $entries[] = [
     //                 'sort_date'   => \Carbon\Carbon::parse($employee->date_hired)->subDay(),
-    //                 'period'      => 'Opening Balance',
+    //                 'period'      => $openingDate->format('m-d-y'),
     //                 'particulars' => 'Transferred from physical leave card',
     //                 'earned'      => round((float) $credit->opening_balance, 3),
     //                 'abs_wp'      => 0,
@@ -595,9 +606,39 @@ class EmployeeController extends Controller
     //                 'used'        => 0,
     //             ];
     //         }
+
+    //         if ($credit && (float) $credit->opening_balance > 0) {
+    //             $delta = round((float) $credit->total_credits - (float) $credit->opening_balance, 3);
+
+    //             if ($delta !== 0.0) {
+    //                 $correctionLog = ActivityLog::where('subject_type', 'LeaveCredit')
+    //                     ->where('subject_id', $credit->id)
+    //                     ->where('action', 'leave_credit.updated')
+    //                     ->orderByDesc('created_at')
+    //                     ->with('user:id,username')
+    //                     ->first();
+
+    //                 $correctionDate = $correctionLog
+    //                     ? \Carbon\Carbon::parse($correctionLog->created_at)
+    //                     : \Carbon\Carbon::parse($credit->last_updated ?? now());
+
+    //                 $actor = $correctionLog?->user?->username ?? 'HR Admin';
+
+    //                 $entries[] = [
+    //                     'sort_date'   => $correctionDate,
+    //                     'period'      => $correctionDate->format('m-d-y'),
+    //                     'particulars' => "Balance correction by{$actor}"
+    //                         . ($delta > 0 ? ' (increase)' : ' (decrease)'),
+    //                     'earned'      => $delta > 0 ? $delta : 0,
+    //                     'abs_wp'      => 0,
+    //                     'abs_wop'     => 0,
+    //                     'used'        => $delta < 0 ? abs($delta) : 0,
+    //                 ];
+    //             }
+    //         }
     //     }
 
-    //     $attendanceRows = \App\Models\Attendance::where('employee_id', $employee->id)->get();
+    //     $attendanceRows = Attendance::where('employee_id', $employee->id)->get();
 
     //     foreach ($attendanceRows as $row) {
     //         $earned = $type === 'vl'
@@ -616,7 +657,7 @@ class EmployeeController extends Controller
     //     }
 
     //     if ($config) {
-    //         $leaveRecords = \App\Models\LeaveRecord::where('employee_id', $employee->id)
+    //         $leaveRecords = LeaveRecord::where('employee_id', $employee->id)
     //             ->where('leave_configuration_id', $config->id)
     //             ->get();
 
@@ -667,73 +708,33 @@ class EmployeeController extends Controller
 
     //     return $entries;
     // }
-
     private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type): array
     {
         $entries = [];
 
+        $credit = null;
         if ($config) {
             $credit = \App\Models\LeaveCredit::where('employee_id', $employee->id)
                 ->where('leave_configuration_id', $config->id)
                 ->where('year', now()->year)
                 ->first();
-
-            if ($credit && (float) $credit->opening_balance > 0) {
-                $entries[] = [
-                    'sort_date'   => \Carbon\Carbon::parse($employee->date_hired)->subDay(),
-                    'period'      => 'Opening Balance',
-                    'particulars' => 'Transferred from physical leave card',
-                    'earned'      => round((float) $credit->opening_balance, 3),
-                    'abs_wp'      => 0,
-                    'abs_wop'     => 0,
-                    'used'        => 0,
-                ];
-            }
-
-            // Balance Correction line — surfaces when total_credits has been manually
-            // adjusted after the opening balance was first set (opening_balance itself
-            // is never overwritten, so this delta only appears when they diverge)
-            if ($credit && (float) $credit->opening_balance > 0) {
-                $delta = round((float) $credit->total_credits - (float) $credit->opening_balance, 3);
-
-                if ($delta !== 0.0) {
-                    $correctionLog = \App\Models\ActivityLog::where('subject_type', 'LeaveCredit')
-                        ->where('subject_id', $credit->id)
-                        ->where('action', 'leave_credit.updated')
-                        ->orderByDesc('created_at')
-                        ->with('user:id,username')
-                        ->first();
-
-                    $correctionDate = $correctionLog
-                        ? \Carbon\Carbon::parse($correctionLog->created_at)
-                        : \Carbon\Carbon::parse($credit->last_updated ?? now());
-
-                    $actor = $correctionLog?->user?->username ?? 'HR Admin';
-
-                    $entries[] = [
-                        'sort_date'   => $correctionDate,
-                        'period'      => $correctionDate->format('m-d-y'),
-                        'particulars' => "Balance correction by {$actor}"
-                            . ($delta > 0 ? ' (increase)' : ' (decrease)'),
-                        'earned'      => $delta > 0 ? $delta : 0,
-                        'abs_wp'      => 0,
-                        'abs_wop'     => 0,
-                        'used'        => $delta < 0 ? abs($delta) : 0,
-                    ];
-                }
-            }
         }
 
-        $attendanceRows = \App\Models\Attendance::where('employee_id', $employee->id)->get();
+        // Attendance, leave records, monetizations built first now —
+        // opening balance / correction need these to determine sort_date
+        $attendanceRows = Attendance::where('employee_id', $employee->id)->get();
 
         foreach ($attendanceRows as $row) {
             $earned = $type === 'vl'
                 ? $row->vl_earned - $row->tardiness_equivalent_days
                 : $row->sl_earned;
 
+            $creditDate = \Carbon\Carbon::parse("{$row->month} 1, {$row->year}");
+
+
             $entries[] = [
-                'sort_date'   => \Carbon\Carbon::parse("{$row->month} 1, {$row->year}"),
-                'period'      => "{$row->month} {$row->year}",
+                'sort_date'   => $creditDate,
+                'period'      => $creditDate->format('m-d-y') . ' (' . $creditDate->format('M') . ')',
                 'particulars' => 'Monthly credit',
                 'earned'      => round($earned, 3),
                 'abs_wp'      => (float) $row->absent_with_leave_days,
@@ -743,7 +744,7 @@ class EmployeeController extends Controller
         }
 
         if ($config) {
-            $leaveRecords = \App\Models\LeaveRecord::where('employee_id', $employee->id)
+            $leaveRecords = LeaveRecord::where('employee_id', $employee->id)
                 ->where('leave_configuration_id', $config->id)
                 ->get();
 
@@ -780,6 +781,56 @@ class EmployeeController extends Controller
                     'abs_wop'     => 0,
                     'used'        => round((float) $mon->days_monetized, 3),
                 ];
+            }
+        }
+
+        // Opening balance / correction now built LAST, using the earliest
+        // date among all other entries so this always sorts first regardless
+        // of whether attendance was backfilled earlier than date_hired
+        if ($config && $credit) {
+            $earliestOtherDate = collect($entries)->min('sort_date');
+            $baseDate = $earliestOtherDate
+                ? $earliestOtherDate->copy()->subDay()
+                : \Carbon\Carbon::parse($employee->date_hired)->subDay();
+
+            if ((float) $credit->opening_balance > 0) {
+                $entries[] = [
+                    'sort_date'   => $baseDate,
+                    'period'      => $baseDate->format('m-d-y'),
+                    'particulars' => 'Transferred from physical leave card',
+                    'earned'      => round((float) $credit->opening_balance, 3),
+                    'abs_wp'      => 0,
+                    'abs_wop'     => 0,
+                    'used'        => 0,
+                ];
+
+                $delta = round((float) $credit->total_credits - (float) $credit->opening_balance, 3);
+
+                if ($delta !== 0.0) {
+                    $correctionLog = ActivityLog::where('subject_type', 'LeaveCredit')
+                        ->where('subject_id', $credit->id)
+                        ->where('action', 'leave_credit.updated')
+                        ->orderByDesc('created_at')
+                        ->with('user:id,username')
+                        ->first();
+
+                    $correctionDate = $correctionLog
+                        ? \Carbon\Carbon::parse($correctionLog->created_at)
+                        : \Carbon\Carbon::parse($credit->last_updated ?? now());
+
+                    $actor = $correctionLog?->user?->username ?? 'HR Admin';
+
+                    $entries[] = [
+                        'sort_date'   => $correctionDate,
+                        'period'      => $correctionDate->format('m-d-y'),
+                        'particulars' => "Balance correction"
+                            . ($delta > 0 ? ' (increase)' : ' (decrease)'),
+                        'earned'      => $delta > 0 ? $delta : 0,
+                        'abs_wp'      => 0,
+                        'abs_wop'     => 0,
+                        'used'        => $delta < 0 ? abs($delta) : 0,
+                    ];
+                }
             }
         }
 

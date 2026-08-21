@@ -103,7 +103,7 @@ class UserSeeder extends Seeder
                     'email' => $username . '@gmail.com',
                     'password' => Hash::make('@Password123'),
                     'role' => 'employee',
-                    'must_change_password' => false,
+                    'must_change_password' => true,
                 ]
             );
         }

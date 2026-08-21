@@ -95,6 +95,105 @@ class EmploymentHistoryController extends Controller
         ], 201);
     }
 
+    // public function update(Request $request, $employeeId, $promotionId)
+    // {
+    //     $history = EmploymentHistory::where('employee_id', $employeeId)
+    //         ->where('id', $promotionId)
+    //         ->firstOrFail();
+
+    //     $request->validate([
+    //         'previous_position'          => 'nullable|string|max:255',
+    //         'new_position'               => 'required|string|max:255|exists:positions,title',
+    //         'previous_employment_status' => 'nullable|in:permanent,casual,elected,job_order,resigned,retired',
+    //         'new_employment_status'      => 'required|in:permanent,casual,elected,job_order,resigned,retired',
+    //         'effective_date'             => 'required|date',
+    //         'remarks'                    => 'nullable|string',
+    //     ]);
+
+    //     $history->update($request->only([
+    //         'previous_position',
+    //         'new_position',
+    //         'previous_employment_status',
+    //         'new_employment_status',
+    //         'effective_date',
+    //         'remarks',
+    //     ]));
+
+    //     ActivityLog::create([
+    //         'user_id'      => $request->user()->id,
+    //         'action'       => 'employment_history.updated',
+    //         'description'  => "Corrected employment history record #{$promotionId} for employee #{$employeeId}",
+    //         'subject_type' => 'Employee',
+    //         'subject_id'   => $employeeId,
+    //     ]);
+
+    //     return response()->json([
+    //         'message' => 'Employment history updated successfully',
+    //         'history' => $history,
+    //     ]);
+    // }
+
+    public function update(Request $request, $employeeId, $promotionId)
+    {
+        $history = EmploymentHistory::where('employee_id', $employeeId)
+            ->where('id', $promotionId)
+            ->firstOrFail();
+
+        $request->validate([
+            'previous_position'          => 'nullable|string|max:255',
+            'new_position'               => 'required|string|max:255|exists:positions,title',
+            'previous_employment_status' => 'nullable|in:permanent,casual,elected,job_order,resigned,retired',
+            'new_employment_status'      => 'required|in:permanent,casual,elected,job_order,resigned,retired',
+            'effective_date'             => 'required|date',
+            // 'remarks'                    => 'nullable|string',
+        ]);
+
+        $employee = Employee::findOrFail($employeeId);
+
+        // Is this the employee's most recent history record?
+        $latestRecord = EmploymentHistory::where('employee_id', $employeeId)
+            ->orderBy('effective_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->first();
+
+        $isLatest = $latestRecord && $latestRecord->id === $history->id;
+
+        DB::transaction(function () use ($request, $history, $employee, $isLatest) {
+            $history->update($request->only([
+                'previous_position',
+                'new_position',
+                'previous_employment_status',
+                'new_employment_status',
+                'effective_date',
+                // 'remarks',
+            ]));
+
+            // Correcting the latest record should also correct what's live on the
+            // employee — otherwise the profile keeps showing the typo
+            if ($isLatest) {
+                $employee->update([
+                    'position'          => $request->new_position,
+                    'employment_status' => $request->new_employment_status,
+                ]);
+            }
+
+            ActivityLog::create([
+                'user_id'      => request()->user()->id,
+                'action'       => 'employment_history.updated',
+                'description'  => "Corrected employment history record #{$history->id} for {$employee->first_name} {$employee->surname}"
+                    . ($isLatest ? ' (also updated current position/status)' : ''),
+                'subject_type' => 'Employee',
+                'subject_id'   => $employee->id,
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Employment history updated successfully',
+            'history' => $history,
+            'synced_current_record' => $isLatest,
+        ]);
+    }
+
     public function destroy($employeeId, $promotionId)
     {
         // OPTIMIZED: single query instead of firstOrFail + delete
