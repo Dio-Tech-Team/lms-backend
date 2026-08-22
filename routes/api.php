@@ -88,7 +88,8 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
         // Leave Records (HR Management)
         Route::get('leave-records/summary', [LeaveRecordController::class, 'summary']);
-        Route::apiResource('leave-records', LeaveRecordController::class);
+        Route::apiResource('leave-records', LeaveRecordController::class)->except(['store']);
+        // Route::apiResource('leave-records', LeaveRecordController::class);
 
         // Credit Admin
         Route::post('employees/leave-credits/initialize-all', [LeaveCreditController::class, 'initializeAllCredits']);

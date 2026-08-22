@@ -572,6 +572,7 @@ class LeaveApplicationController extends Controller
         ];
 
         $pdf = Pdf::loadView('pdf.leave-application', $data);
+        // $pdf->setPaper([0, 0, 612, 936]);
         return $pdf->stream('leave-application-' . $application->id . '.pdf');
     }
 }

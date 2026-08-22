@@ -60,6 +60,10 @@ class LeaveRecordController extends Controller
         return response()->json($records);
     }
 
+
+    // Unused — kept for reference. Leave records are created via
+    // LeaveApplicationController::store()/approve() instead. Route excluded in api.php.
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -80,21 +84,8 @@ class LeaveRecordController extends Controller
             ], 422);
         }
 
-
         // OPTIMIZED: wrap both writes in transaction
         $record = DB::transaction(function () use ($validated, $request) {
-            // $record = LeaveRecord::create($validated);
-            // $credit = LeaveCredit::where('employee_id', $validated['employee_id'])
-            //     ->where('leave_configuration_id', $validated['leave_configuration_id'])
-            //     ->where('year', now()->year)
-            //     ->first();
-
-            // if ($credit) {
-            //     $credit->increment('used_credits', $validated['days_taken']);
-            //     $credit->decrement('remaining_balance', $validated['days_taken']);
-            //     $credit->update(['last_updated' => now()]);
-            // }
-            // NEW — log the manual record entry
 
             $record = LeaveRecord::create($validated);
 
@@ -256,22 +247,7 @@ class LeaveRecordController extends Controller
             }
 
             $record->delete();
-
-            // $credit = LeaveCredit::where('employee_id', $record->employee_id)
-            //     ->where('leave_configuration_id', $record->leave_configuration_id)
-            //     ->where('year', now()->year)
-            //     ->first();
-
-            // if ($credit) {
-            //     $credit->decrement('used_credits', $record->days_taken);
-            //     $credit->increment('remaining_balance', $record->days_taken);
-            //     $credit->update(['last_updated' => now()]);
-            // }
-
-            // $record->delete();
         });
-
-        // NEW — log the deletion
         ActivityLog::create([
             'user_id'      => request()->user()->id,
             'action'       => 'leave_record.deleted',

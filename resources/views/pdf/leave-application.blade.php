@@ -5,15 +5,21 @@
     <meta charset="utf-8">
     <title>Application for Leave</title>
     <style>
+        /* Philippine "Long"/"Legal" bond paper = 8.5in x 13in (NOT US Legal, which is 8.5x14) */
+        @page {
+            size: 8.5in 13in;
+            margin: 0.5in 0.6in;
+        }
+
         body {
             font-family: Arial, sans-serif;
-            font-size: 9px;
+            font-size: 10px;
         }
 
         .header-container {
             display: table;
             width: 100%;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
         }
 
         .header-text {
@@ -33,19 +39,19 @@
 
         table.main td {
             border: 1px solid #000;
-            padding: 4px;
+            padding: 6px;
             vertical-align: top;
         }
 
         .checkbox {
             display: inline-block;
-            width: 8px;
-            height: 8px;
+            width: 9px;
+            height: 9px;
             border: 1px solid #000;
-            margin-right: 3px;
+            margin-right: 4px;
             text-align: center;
-            line-height: 8px;
-            font-size: 8px;
+            line-height: 9px;
+            font-size: 9px;
         }
 
         .checked {
@@ -57,10 +63,11 @@
             font-weight: bold;
             background-color: #e8e8e8;
             text-align: center;
+            padding: 5px;
         }
 
         .small-text {
-            font-size: 7px;
+            font-size: 8px;
         }
 
         .underline {
@@ -70,15 +77,64 @@
         .center {
             text-align: center;
         }
+
+        /* Back page (Instructions) */
+        .back-page {
+            page-break-before: always;
+        }
+
+        .instructions-title {
+            font-weight: bold;
+            text-align: center;
+            font-size: 13px;
+            border: 1px solid #000;
+            padding: 6px;
+            margin-bottom: 8px;
+        }
+
+        .instructions-table {
+            width: 100%;
+            border: 1px solid #000;
+            border-collapse: collapse;
+        }
+
+        .instructions-table td {
+            vertical-align: top;
+            padding: 10px 12px;
+            font-size: 9px;
+            line-height: 1.4;
+        }
+
+        .instructions-table td.col {
+            width: 50%;
+            border: none;
+        }
+
+        .instructions-table td.footnote {
+            border-top: 1px solid #000;
+            font-size: 8px;
+            line-height: 1.35;
+        }
+
+        .instr-item {
+            margin-bottom: 9px;
+        }
+
+        .instr-item strong {
+            font-size: 9.5px;
+        }
     </style>
 </head>
 
 <body>
 
+    <!-- ============ FRONT PAGE ============ -->
+
     <div class="header-text">
-        <p style="margin:0;">Province of Isabela</p>
-        <p style="margin:0;">Municipality of Echague</p>
-        <h2 style="margin:5px 0;">APPLICATION FOR LEAVE</h2>
+        <p style="margin:0; font-weight: bold;">Republic of the Philippines</p>
+        <p style="margin:0; font-weight: bold;">Province of Isabela</p>
+        <p style="margin:0;font-weight: bold;">Municipality of Echague</p>
+        <h2 style="margin:5px 0; font-weight: bold;">APPLICATION FOR LEAVE</h2>
     </div>
 
     <table class="main">
@@ -240,11 +296,12 @@
                     </tr>
                 </table>
                 <br>
-                <div class="center underline">&nbsp;</div>
+
                 <div class="center small-text">
-                    <strong>FE A. BARTOLOME</strong><br>
-                    HR Officer
+                    <strong>FE A. BARTOLOME</strong>
                 </div>
+                <div class="center underline">&nbsp;</div>
+                <strong> HR Officer</strong>
             </td>
             <td style="width:50%;">
                 <strong>7.B RECOMMENDATION</strong><br><br>
@@ -253,7 +310,9 @@
                 For approval<br>
                 <span
                     class="checkbox {{ $application->status === 'rejected' ? 'checked' : '' }}">{{ $application->status === 'rejected' ? 'X' : '' }}</span>
-                For disapproval due to ___________<br><br><br><br>
+                For disapproval due to _________________________________________________ <br>
+                _________________________________________________<br>
+                _________________________________________________<br><br><br>
                 <div class="center underline">&nbsp;</div>
                 <div class="center small-text">(Authorized Officer)</div>
             </td>
@@ -261,24 +320,206 @@
         <tr>
             <td>
                 <strong>7.C APPROVED FOR</strong><br><br>
-                {{ $application->status === 'approved' ? $application->days_applied : '____' }} days with pay<br>
-                ____ days without pay<br>
-                ____ others (Specify)
+                {{ $application->status === 'approved' ? $application->days_applied : '_______' }} days with pay<br>
+                _______ days without pay<br>
+                _______ others (Specify)
             </td>
             <td>
                 <strong>7.D DISAPPROVED DUE TO:</strong><br><br>
-                _______________________<br>
-                _______________________<br>
-                _______________________
+                &nbsp;&nbsp;__________________________________________<br>
+                &nbsp;&nbsp;__________________________________________<br>
+                &nbsp;&nbsp;__________________________________________
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="center">
+                <strong><u>FAUSTINO A. DY, V</u></strong>
+                <br>
+                Municipal Mayor
             </td>
         </tr>
     </table>
 
-    <br>
-    <div class="center">
-        <strong>FAUSTINO A. DY, V</strong><br>
-        <div class="underline">&nbsp;</div>
-        Municipal Mayor
+
+
+    <!-- ============ BACK PAGE — INSTRUCTIONS AND REQUIREMENTS ============ -->
+
+    <div class="back-page">
+
+        <div class="instructions-title">INSTRUCTIONS AND REQUIREMENTS</div>
+
+        <table class="instructions-table">
+            <tr>
+                <td class="col" style="border-right: 1px solid #000;">
+                    <span class="small-text">
+                        Application for any type of leave shall be made on this Form and
+                        <strong><u>to be accomplished at least in duplicate</u></strong> with documentary
+                        requirements, as follows:
+                    </span>
+
+                    <div class="instr-item" style="margin-top:8px;">
+                        <strong>1. Vacation leave*</strong><br>
+                        It shall be filed five (5) days in advance, whenever possible, of the
+                        effective date of such leave. Vacation leave within the Philippines or
+                        abroad shall be indicated in the form for purposes of securing travel
+                        authority and completing clearance from money and work accountabilities.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>2. Mandatory/Forced leave</strong><br>
+                        Annual five-day vacation leave shall be forfeited if not taken during the
+                        year. In case the scheduled leave has been cancelled in the exigency of
+                        the service by the head of agency, it shall no longer be deducted from
+                        the accumulated vacation leave. Availment of one (1) day or more Vacation
+                        Leave (VL) shall be considered for complying the mandatory/forced leave
+                        subject to the conditions under Section 25, Rule XVI of the Omnibus Rules
+                        Implementing E.O. No. 292.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>3. Sick leave*</strong><br>
+                        &bull; It shall be filed immediately upon employee's return from such leave.<br>
+                        &bull; If filed in advance or exceeding five (5) days, application shall be
+                        accompanied by a <u>medical certificate</u>. In case medical consultation was
+                        not availed of, an <u>affidavit</u> should be executed by an applicant.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>4. Maternity leave* &ndash; 105 days</strong><br>
+                        &bull; Proof of pregnancy e.g. ultrasound, doctor's certificate on the
+                        expected date of delivery<br>
+                        &bull; Accomplished Notice of Allocation of Maternity Leave Credits (CS
+                        Form No. 6a), if needed<br>
+                        &bull; Seconded female employees shall enjoy maternity leave with full pay
+                        in the recipient agency.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>5. Paternity leave &ndash; 7 days</strong><br>
+                        Proof of child's delivery e.g. birth certificate, medical certificate and
+                        marriage contract.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>6. Special Privilege leave &ndash; 3 days</strong><br>
+                        It shall be filed/approved for at least one (1) week prior to availment,
+                        except on emergency cases. Special privilege leave within the Philippines
+                        or abroad shall be indicated in the form for purposes of securing travel
+                        authority and completing clearance from money and work accountabilities.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>7. Solo Parent leave &ndash; 7 days</strong><br>
+                        It shall be filed in advance or whenever possible five (5) days before
+                        going on such leave with updated Solo Parent Identification Card.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>8. Study leave* &ndash; up to 6 months</strong><br>
+                        &bull; Shall meet the agency's internal requirements, if any;<br>
+                        &bull; Contract between the agency head or authorized representative and
+                        the employee concerned.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>9. VAWC leave &ndash; 10 days</strong><br>
+                        &bull; It shall be filed in advance or immediately upon the woman
+                        employee's return from such leave.<br>
+                        &bull; It shall be accompanied by any of the following supporting documents:<br>
+                        &nbsp;&nbsp;a. Barangay Protection Order (BPO) obtained from the barangay;<br>
+                        &nbsp;&nbsp;b. Temporary/Permanent Protection Order (TPO/PPO) obtained from
+                        the court;<br>
+                        &nbsp;&nbsp;c. If the protection order is not yet issued by the barangay or
+                        the court, a certification issued by the Punong Barangay/Kagawad or
+                        Prosecutor or the Clerk of Court that the application for the BPO, TPO or
+                        PPO has been filed with the said office shall be sufficient to support the
+                        application for the ten-day leave; or<br>
+                        &nbsp;&nbsp;d. In the absence of the BPO/TPO/PPO or the certification, a
+                        police report specifying the details of the occurrence of violence on the
+                        victim and a medical certificate may be considered, at the discretion of
+                        the immediate supervisor of the woman employee concerned.
+                    </div>
+                </td>
+
+                <td class="col">
+                    <div class="instr-item">
+                        <strong>10. Rehabilitation leave* &ndash; up to 6 months</strong><br>
+                        &bull; Application shall be made within one (1) week from the time of the
+                        accident except when a longer period is warranted.<br>
+                        &bull; Letter request supported by relevant reports such as the police
+                        report, if any,<br>
+                        &bull; Medical certificate on the nature of the injuries, the course of
+                        treatment involved, and the need to undergo rest, recuperation, and
+                        rehabilitation, as the case may be.<br>
+                        &bull; Written concurrence of a government physician should be obtained
+                        relative to the recommendation for rehabilitation if the attending
+                        physician is a private practitioner, particularly on the duration of the
+                        period of rehabilitation.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>11. Special leave benefits for women* &ndash; up to 2 months</strong><br>
+                        &bull; The application may be filed in advance, that is, at least five (5)
+                        days prior to the scheduled date of the gynecological surgery that will be
+                        undergone by the employee. In case of emergency, the application for
+                        special leave shall be filed immediately upon employee's return but during
+                        confinement the agency shall be notified of said surgery.<br>
+                        &bull; The application shall be accompanied by a medical certificate filed
+                        out by the proper medical authorities, e.g. the attending surgeon
+                        accompanied by a clinical summary reflecting the gynecological disorder
+                        which shall be addressed or was addressed by the said surgery; the
+                        histopathological report; the operative technique used for the surgery;
+                        the duration of the surgery including the peri-operative period (period of
+                        confinement around surgery); as well as the employee's estimated period of
+                        recuperation for the same.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>12. Special Emergency (Calamity) leave &ndash; up to 5 days</strong><br>
+                        &bull; The special emergency leave can be applied for a maximum of five (5)
+                        straight working days or staggered basis within thirty (30) days from the
+                        actual occurrence of the natural calamity/disaster. Said privilege shall be
+                        enjoyed once a year, not in every instance of calamity or disaster.<br>
+                        &bull; The head of office shall take full responsibility for the grant of
+                        special emergency leave and verification of the employee's eligibility to
+                        be granted thereof. Said verification shall include: validation of place of
+                        residence based on latest available records of the affected employee;
+                        verification that the place of residence is covered in the declaration of
+                        calamity area by the proper government agency; and such other proofs as
+                        may be necessary.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>13. Monetization of leave credits</strong><br>
+                        Application for monetization of fifty percent (50%) or more of the
+                        accumulated leave credits shall be accompanied by letter request to the
+                        head of the agency stating the valid and justifiable reasons.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>14. Terminal leave*</strong><br>
+                        Proof of employee's resignation or retirement or separation from the
+                        service.
+                    </div>
+
+                    <div class="instr-item">
+                        <strong>15. Adoption Leave</strong><br>
+                        &bull; Application for adoption leave shall be filed with an authenticated
+                        copy of the Pre-Adoptive Placement Authority issued by the Department of
+                        Social Welfare and Development (DSWD).
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2" class="footnote">
+                    * For leave of absence for thirty (30) calendar days or more and terminal
+                    leave, application shall be accompanied by a <u>clearance from money, property
+                        and work-related accountabilities</u> (pursuant to CSC Memorandum Circular No.
+                    2, s. 1985).
+                </td>
+            </tr>
+        </table>
+
     </div>
 
 </body>
