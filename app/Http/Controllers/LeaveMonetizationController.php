@@ -226,9 +226,12 @@ class LeaveMonetizationController extends Controller
         }
 
         $result = DB::transaction(function () use ($monetization, $request) {
+
+            $year = \Carbon\Carbon::parse($monetization->applied_at)->year;
+
             $credit = LeaveCredit::where('employee_id', $monetization->employee_id)
                 ->where('leave_configuration_id', $monetization->leave_configuration_id)
-                ->where('year', now()->year)
+                ->where('year', $year)
                 ->lockForUpdate()
                 ->first();
 

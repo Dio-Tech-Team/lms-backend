@@ -15,6 +15,7 @@ use App\Models\LeaveApplication;
 use App\Models\LeaveRecord;
 use App\Models\Attendance;
 use Illuminate\Validation\Rules\Password;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Log;
 use App\Models\ActivityLog;
 use Carbon\Carbon;
@@ -137,7 +138,7 @@ class EmployeeController extends Controller
             'bloodtype'                        => 'nullable|string',
             'highest_educational_attainment'   => 'required|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
-            'contact_number'                   => 'nullable|string',
+            'contact_number'                   => 'nullable|digits:11',
             'umid_id'                          => 'nullable|string',
             'pagibig_id'                       => 'nullable|string',
             'philhealth_number'                => 'nullable|string',
@@ -369,7 +370,7 @@ class EmployeeController extends Controller
             'bloodtype'                        => 'nullable|string',
             'highest_educational_attainment'   => 'sometimes|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
-            'contact_number'                   => 'nullable|string',
+            'contact_number'                   => 'nullable|digits:11',
             'umid_id'                          => 'nullable|string',
             'pagibig_id'                       => 'nullable|string',
             'philhealth_number'                => 'nullable|string',
@@ -570,9 +571,11 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        $year = (int) $request->input('year', now()->year);   // NEW
 
         $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
         $slConfig = LeaveConfiguration::where('code', 'SL')->first();
+        $flConfig = LeaveConfiguration::where('code', 'FL')->first();   // ADD THIS
 
         return response()->json([
             'employee' => [
@@ -580,11 +583,49 @@ class EmployeeController extends Controller
                 'name'     => $employee->first_name . ' ' . $employee->surname,
                 'position' => $employee->position,
             ],
-            'vacation_leave' => $this->buildLeaveCardForType($employee, $vlConfig, 'vl'),
-            'sick_leave'     => $this->buildLeaveCardForType($employee, $slConfig, 'sl'),
+            'year' => $year,   // NEW — handy for frontend to confirm/display
+            'vacation_leave' => $this->buildLeaveCardForType(
+                $employee,
+                $vlConfig,
+                'vl',
+                $year,
+                $flConfig ? [$flConfig->id] : []
+            ),
+            'sick_leave' => $this->buildLeaveCardForType($employee, $slConfig, 'sl', $year),
         ]);
     }
-    private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type): array
+    public function leaveCardPdf(string $id, Request $request)
+    {
+        $employee = Employee::select('id', 'user_id', 'first_name', 'surname', 'position', 'date_hired', 'employment_status')
+            ->findOrFail($id);
+
+        $user = $request->user();
+        if (!in_array($user->role, ['hr_admin', 'super_admin'], true) && $employee->user_id !== $user->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $year = (int) $request->input('year', now()->year);
+
+        $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
+        $slConfig = LeaveConfiguration::where('code', 'SL')->first();
+        $flConfig = LeaveConfiguration::where('code', 'FL')->first();
+
+        $data = [
+            'employee' => [
+                'name'               => $employee->first_name . ' ' . $employee->surname,
+                'position'           => $employee->position,
+                'date_hired'         => $employee->date_hired,
+                'employment_status'  => $employee->employment_status,
+            ],
+            'year'           => $year,
+            'vacation_leave' => $this->buildLeaveCardForType($employee, $vlConfig, 'vl', $year, $flConfig ? [$flConfig->id] : []),
+            'sick_leave'     => $this->buildLeaveCardForType($employee, $slConfig, 'sl', $year),
+        ];
+
+        $pdf = Pdf::loadView('pdf.leave-card', $data);
+        return $pdf->stream("leave-card-{$employee->surname}-{$year}.pdf");
+    }
+    private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type, int $year, array $deductionConfigIds = []): array
     {
         $entries = [];
 
@@ -592,14 +633,14 @@ class EmployeeController extends Controller
         if ($config) {
             $credit = \App\Models\LeaveCredit::where('employee_id', $employee->id)
                 ->where('leave_configuration_id', $config->id)
-                ->where('year', now()->year)
+                ->where('year', $year)
                 ->first();
         }
 
         // Attendance, leave records, monetizations built first now —
         // opening balance / correction need these to determine sort_date
-        $attendanceRows = Attendance::where('employee_id', $employee->id)->get();
-
+        $attendanceRows = Attendance::where('employee_id', $employee->id)->where('year', $year)                              // NEW
+            ->get();
         // foreach ($attendanceRows as $row) {
         //     $earned = $type === 'vl'
         //         ? $row->vl_earned - $row->tardiness_equivalent_days
@@ -625,8 +666,11 @@ class EmployeeController extends Controller
         }
 
         if ($config) {
+            $recordConfigIds = array_merge([$config->id], $deductionConfigIds);
             $leaveRecords = LeaveRecord::where('employee_id', $employee->id)
-                ->where('leave_configuration_id', $config->id)
+                ->whereIn('leave_configuration_id', $recordConfigIds)
+                ->whereYear('start_date', $year)
+                ->with('leaveConfiguration:id,name')
                 ->get();
 
             foreach ($leaveRecords as $rec) {
@@ -637,7 +681,7 @@ class EmployeeController extends Controller
                 $entries[] = [
                     'sort_date'   => $start,
                     'period'      => $start->format('m-d-y') . ' to ' . $end->format('m-d-y'),
-                    'particulars' => $config->name . ' taken',
+                    'particulars' => $rec->leaveConfiguration->name . ' taken',
                     'earned'      => 0,
                     'abs_wp'      => round($withPay, 3),
                     'abs_wop'     => round((float) $rec->no_pay_days, 3),
@@ -648,6 +692,7 @@ class EmployeeController extends Controller
             $monetizations = \App\Models\LeaveMonetization::where('employee_id', $employee->id)
                 ->where('leave_configuration_id', $config->id)
                 ->where('status', 'approved')
+                ->whereYear('applied_at', $year)
                 ->get();
 
             foreach ($monetizations as $mon) {
@@ -674,43 +719,52 @@ class EmployeeController extends Controller
                 ? $earliestOtherDate->copy()->subDay()
                 : \Carbon\Carbon::parse($employee->date_hired)->subDay();
 
+            $hireYear = \Carbon\Carbon::parse($employee->date_hired)->year;
             if ((float) $credit->opening_balance > 0) {
-                $entries[] = [
-                    'sort_date'   => $baseDate,
-                    'period'      => $baseDate->format('m-d-y'),
-                    'particulars' => 'Transferred from physical leave card',
-                    'earned'      => round((float) $credit->opening_balance, 3),
-                    'abs_wp'      => 0,
-                    'abs_wop'     => 0,
-                    'used'        => 0,
-                ];
-
-                $delta = round((float) $credit->total_credits - (float) $credit->opening_balance, 3);
-
-                if ($delta !== 0.0) {
-                    $correctionLog = ActivityLog::where('subject_type', 'LeaveCredit')
-                        ->where('subject_id', $credit->id)
-                        ->where('action', 'leave_credit.updated')
-                        ->orderByDesc('created_at')
-                        ->with('user:id,username')
-                        ->first();
-
-                    $correctionDate = $correctionLog
-                        ? \Carbon\Carbon::parse($correctionLog->created_at)
-                        : \Carbon\Carbon::parse($credit->last_updated ?? now());
-
-                    $actor = $correctionLog?->user?->username ?? 'HR Admin';
-
+                $earliestCreditYear = \App\Models\LeaveCredit::where('employee_id', $employee->id)
+                    ->where('leave_configuration_id', $config->id)
+                    ->min('year');
+                if ($year === $earliestCreditYear) {
                     $entries[] = [
-                        'sort_date'   => $correctionDate,
-                        'period'      => $correctionDate->format('m-d-y'),
-                        'particulars' => "Balance correction"
-                            . ($delta > 0 ? ' (increase)' : ' (decrease)'),
-                        'earned'      => $delta > 0 ? $delta : 0,
+                        'sort_date'   => $baseDate,
+                        'period'      => $baseDate->format('m-d-y'),
+                        'particulars' => 'Transferred from physical leave card',
+                        'earned'      => round((float) $credit->opening_balance, 3),
                         'abs_wp'      => 0,
                         'abs_wop'     => 0,
-                        'used'        => $delta < 0 ? abs($delta) : 0,
+                        'used'        => 0,
                     ];
+
+                    $rawMonthlyEarnedSum = $type === 'vl'
+                        ? $attendanceRows->sum('vl_earned')
+                        : $attendanceRows->sum('sl_earned');
+                    $expectedTotalCredits = (float) $credit->opening_balance + $rawMonthlyEarnedSum;
+                    $delta = round((float) $credit->total_credits - $expectedTotalCredits, 3);
+                    if ($delta !== 0.0) {
+                        $correctionLog = ActivityLog::where('subject_type', 'LeaveCredit')
+                            ->where('subject_id', $credit->id)
+                            ->where('action', 'leave_credit.updated')
+                            ->orderByDesc('created_at')
+                            ->with('user:id,username')
+                            ->first();
+
+                        $correctionDate = $correctionLog
+                            ? \Carbon\Carbon::parse($correctionLog->created_at)
+                            : \Carbon\Carbon::parse($credit->last_updated ?? now());
+
+                        $actor = $correctionLog?->user?->username ?? 'HR Admin';
+
+                        $entries[] = [
+                            'sort_date'   => $correctionDate,
+                            'period'      => $correctionDate->format('m-d-y'),
+                            'particulars' => "Balance correction"
+                                . ($delta > 0 ? ' (increase)' : ' (decrease)'),
+                            'earned'      => $delta > 0 ? $delta : 0,
+                            'abs_wp'      => 0,
+                            'abs_wop'     => 0,
+                            'used'        => $delta < 0 ? abs($delta) : 0,
+                        ];
+                    }
                 }
             }
         }
@@ -771,6 +825,7 @@ class EmployeeController extends Controller
                     'name'           => "{$employee->first_name} {$employee->surname}",
                     'position'       => $employee->position,
                     'department'     => $employee->department?->name ?? 'Unassigned',
+                    'sex'            => $employee->sex,   // ADD THIS
                     'current_step'   => $stepBeforeYear,
                     'next_step'      => $stepAfterYear,
                     'next_step_date' => $nextStepDate->format('Y-m-d'),

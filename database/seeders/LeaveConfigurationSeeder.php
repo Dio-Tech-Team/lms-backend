@@ -30,7 +30,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'code'           => 'SL',
                 'application_to'  => ['all'],
                 'can_carry_over' => true,
-                'can_monetize'   => false,
+                'can_monetize'   => true,
                 'fixed_days'     => null,
                 'monthly_credit' => 1.25,
                 'credit_type'    => 'monthly',

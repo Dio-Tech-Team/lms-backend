@@ -131,6 +131,20 @@ class LeaveApplicationController extends Controller
                 'message' => 'Unauthorized: Job Order personnel are only eligible for Wellness Leave.'
             ], 403);
         }
+        // 2. Choose Workflow Route
+        $isAdminFiling = $this->isAdmin($user) && $request->filled('employee_id');
+
+        // Block VL applications filed less than 5 days before the leave start date
+        if ($config->code === 'VL' && !$request->boolean('is_paper_submission') && !$isAdminFiling) {
+            $daysUntilLeave = now()->startOfDay()->diffInDays(Carbon::parse($validated['start_date'])->startOfDay(), false);
+
+            if ($daysUntilLeave < 5) {
+                return response()->json([
+                    'message' => 'Vacation Leave must be filed at least 5 days before the start date.'
+                ], 422);
+            }
+        }
+
         // Block if pending (any dates)
         if (!$request->boolean('is_paper_submission')) {
             $hasPending = LeaveApplication::where('employee_id', $employee->id)
@@ -215,8 +229,7 @@ class LeaveApplicationController extends Controller
             ->where('year', $year)
             ->first();
 
-        // 2. Choose Workflow Route
-        $isAdminFiling = $this->isAdmin($user) && $request->filled('employee_id');
+
         if ($request->boolean('is_paper_submission') || $isAdminFiling) {
             $application = DB::transaction(function () use ($employee, $validated,  $deductionCredit, $request, $config) {
                 $app = LeaveApplication::create([

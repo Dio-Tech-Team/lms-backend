@@ -221,34 +221,6 @@ class AttendanceController extends Controller
                 ]);
             });
     }
-    // private function findEmployeeByName(string $name)
-    // {
-    //     $parts = explode(',', $name);
-    //     if (count($parts) < 2) return null;
-
-    //     $surname = trim($parts[0]);
-    //     $firstPart = trim($parts[1]);
-
-    //     // remove dot (C.)
-    //     $firstPart = str_replace('.', '', $firstPart);
-
-    //     $pieces = array_filter(explode(' ', $firstPart)); // remove empty entries
-    //     $pieces = array_values($pieces); // reindex
-
-    //     if (count($pieces) === 0) return null;
-
-    //     // Last piece = middle initial, everything before = first name
-    //     $middleInitial = trim(end($pieces));
-    //     $firstNamePieces = array_slice($pieces, 0, -1);
-    //     $firstName = implode(' ', $firstNamePieces);
-
-    //     return Employee::whereRaw('LOWER(surname) = ?', [strtolower($surname)])
-    //         ->whereRaw('LOWER(first_name) = ?', [strtolower($firstName)])
-    //         ->when($middleInitial, function ($q) use ($middleInitial) {
-    //             $q->whereRaw('LEFT(LOWER(middle_name), 1) = ?', [strtolower($middleInitial)]);
-    //         })
-    //         ->first();
-    // }
 
     private function findEmployeeByName(string $name): ?Employee
     {
@@ -390,80 +362,4 @@ class AttendanceController extends Controller
             $slCredit->save();
         }
     }
-
-
-    // private function updateLeaveCredits(Employee $employee, int $year, array $computation, int $uploadedBy)
-    // {
-    //     $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
-    //     $slConfig = LeaveConfiguration::where('code', 'SL')->first();
-
-    //     if ($vlConfig) {
-    //         $vlCredit = LeaveCredit::firstOrCreate(
-    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $vlConfig->id, 'year' => $year],
-    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
-    //         );
-
-    //         // Earned VL adds normally
-    //         $vlCredit->total_credits += $computation['vl_earned'];
-    //         $vlCredit->last_updated = now();
-    //         $vlCredit->save();
-
-    //         // Tardiness deducted through deductLeave() so it's capped at whatever balance exists
-    //         $tardinessDays = $computation['tardiness_equivalent_days'];
-    //         if ($tardinessDays > 0) {
-    //             $unmetDays = $vlCredit->deductLeave($tardinessDays);
-
-    //             // Balance couldn't absorb the full deduction — excess goes to payroll, not the system
-    //             if ($unmetDays > 0) {
-    //                 ActivityLog::create([
-    //                     'user_id'      => $uploadedBy,
-    //                     'action'       => 'leave_credit.tardiness_exceeded_balance',
-    //                     'description'  => "{$employee->first_name} {$employee->surname}: {$unmetDays} day(s) of tardiness exceeded available VL balance for {$year} — forward to payroll for salary deduction.",
-    //                     'subject_type' => 'LeaveCredit',
-    //                     'subject_id'   => $vlCredit->id,
-    //                 ]);
-    //             }
-    //         }
-    //     }
-
-    //     if ($slConfig) {
-    //         $slCredit = LeaveCredit::firstOrCreate(
-    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $slConfig->id, 'year' => $year],
-    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
-    //         );
-    //         $slCredit->total_credits += $computation['sl_earned'];
-    //         $slCredit->last_updated = now();
-    //         $slCredit->save();
-    //     }
-    // }
-
-    // private function updateLeaveCredits(Employee $employee, int $year, array $computation)
-    // {
-
-    //     $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
-    //     $slConfig = LeaveConfiguration::where('code', 'SL')->first();
-
-    //     if ($vlConfig) {
-    //         $vlCredit = LeaveCredit::firstOrCreate(
-    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $vlConfig->id, 'year' => $year],
-    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
-    //         );
-    //         $netVl = $computation['vl_earned'] - $computation['tardiness_equivalent_days'];
-    //         $vlCredit->total_credits += $netVl;
-    //         $vlCredit->remaining_balance += $netVl;
-    //         $vlCredit->last_updated = now();
-    //         $vlCredit->save();
-    //     }
-
-    //     if ($slConfig) {
-    //         $slCredit = LeaveCredit::firstOrCreate(
-    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $slConfig->id, 'year' => $year],
-    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
-    //         );
-    //         $slCredit->total_credits += $computation['sl_earned'];
-    //         $slCredit->remaining_balance += $computation['sl_earned'];
-    //         $slCredit->last_updated = now();
-    //         $slCredit->save();
-    //     }
-    // }
 }

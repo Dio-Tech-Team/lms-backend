@@ -42,6 +42,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('employees/stats', [EmployeeController::class, 'stats']);
     Route::get('employees/step-increment-forecast', [EmployeeController::class, 'stepIncrementForecast']);
     Route::get('employees/{id}/leave-card', [EmployeeController::class, 'leaveCard']);
+    Route::get('/employees/{id}/leave-card/pdf', [EmployeeController::class, 'leaveCardPdf']);
     Route::get('employees', [EmployeeController::class, 'index']);
     Route::get('employees/{id}', [EmployeeController::class, 'show']);
 
