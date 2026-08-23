@@ -28,6 +28,7 @@ return new class extends Migration
             $table->decimal('vl_earned', 8, 3)->nullable();
             $table->decimal('sl_earned', 8, 3)->nullable();
             $table->decimal('tardiness_equivalent_days', 8, 3)->nullable();
+            $table->decimal('lwop_days', 8, 3)->default(0); // tardiness that exceeded available VL balance, converted to LWOP
             // $table->foreignId('uploaded_by')->constrained('users')->onDelete('cascade');
             $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();

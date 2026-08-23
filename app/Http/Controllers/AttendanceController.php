@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Attendance;
 use App\Models\LeaveCredit;
 use App\Models\LeaveConfiguration;
+use App\Models\LeaveRecord;
 use App\Models\ActivityLog;
 use App\Service\LeaveCreditComputationService;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -113,7 +114,7 @@ class AttendanceController extends Controller
                         ]);
 
                         // Save the attendance summary record
-                        Attendance::create([
+                        $attendance = Attendance::create([
                             'employee_id'                 => $employee->id,
                             'month'                       => $monthName,
                             'year'                        => $year,
@@ -134,7 +135,10 @@ class AttendanceController extends Controller
                         // $this->updateLeaveCredits($employee, $year, $computation);
 
                         // Update Leave Credits
-                        $this->updateLeaveCredits($employee, $year, $computation, $request->user()->id);
+                        // $this->updateLeaveCredits($employee, $year, $computation, $request->user()->id);
+
+                        //tp
+                        $this->updateLeaveCredits($employee, $month, $year, $computation, $request->user()->id, $attendance);
 
                         $results[] = [
                             'sheet'              => $sheetName,
@@ -170,6 +174,7 @@ class AttendanceController extends Controller
         $missingByDepartment = $this->getMissingAttendance($monthName, $year);
         return response()->json([
             'message' => 'Attendance processed successfully',
+
             'results' => $results,
             'errors'  => $errors,
             'skipped' => $skipped,
@@ -323,8 +328,7 @@ class AttendanceController extends Controller
         return isset($matches[1]) ? (int) $matches[1] : 0;
     }
 
-
-    private function updateLeaveCredits(Employee $employee, int $year, array $computation, int $uploadedBy)
+    private function updateLeaveCredits(Employee $employee, int $month, int $year, array $computation, int $uploadedBy, $attendance)
     {
         $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
         $slConfig = LeaveConfiguration::where('code', 'SL')->first();
@@ -345,12 +349,30 @@ class AttendanceController extends Controller
             if ($tardinessDays > 0) {
                 $unmetDays = $vlCredit->deductLeave($tardinessDays);
 
-                // Balance couldn't absorb the full deduction — excess goes to payroll, not the system
+                // Balance couldn't absorb the full deduction — record as LWOP,
+                // same mechanism as leave-application LWOP, so it shows on the
+                // leave card's "Abs. Und. WOP" column automatically.
                 if ($unmetDays > 0) {
+                    $attendance->lwop_days = $unmetDays;
+                    $attendance->save();
+                    $periodStart = Carbon::create($year, $month, 1)->startOfMonth();
+                    $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
+
+                    LeaveRecord::create([
+                        'employee_id'            => $employee->id,
+                        'leave_configuration_id' => $vlConfig->id,
+                        'recorded_by'            => $uploadedBy,
+                        'start_date'             => $periodStart,
+                        'end_date'               => $periodEnd,
+                        'days_taken'             => $unmetDays,
+                        'no_pay_days'            => $unmetDays,
+                        'remarks'                => "Tardiness/undertime for {$periodStart->format('F Y')} exceeded available VL balance by {$unmetDays} day(s) — recorded as LWOP.",
+                    ]);
+
                     ActivityLog::create([
                         'user_id'      => $uploadedBy,
                         'action'       => 'leave_credit.tardiness_exceeded_balance',
-                        'description'  => "{$employee->first_name} {$employee->surname}: {$unmetDays} day(s) of tardiness exceeded available VL balance for {$year} — forward to payroll for salary deduction.",
+                        'description'  => "{$employee->first_name} {$employee->surname}: {$unmetDays} day(s) of tardiness exceeded available VL balance for {$periodStart->format('F Y')} — recorded as LWOP.",
                         'subject_type' => 'LeaveCredit',
                         'subject_id'   => $vlCredit->id,
                     ]);
@@ -368,6 +390,52 @@ class AttendanceController extends Controller
             $slCredit->save();
         }
     }
+
+
+    // private function updateLeaveCredits(Employee $employee, int $year, array $computation, int $uploadedBy)
+    // {
+    //     $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
+    //     $slConfig = LeaveConfiguration::where('code', 'SL')->first();
+
+    //     if ($vlConfig) {
+    //         $vlCredit = LeaveCredit::firstOrCreate(
+    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $vlConfig->id, 'year' => $year],
+    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
+    //         );
+
+    //         // Earned VL adds normally
+    //         $vlCredit->total_credits += $computation['vl_earned'];
+    //         $vlCredit->last_updated = now();
+    //         $vlCredit->save();
+
+    //         // Tardiness deducted through deductLeave() so it's capped at whatever balance exists
+    //         $tardinessDays = $computation['tardiness_equivalent_days'];
+    //         if ($tardinessDays > 0) {
+    //             $unmetDays = $vlCredit->deductLeave($tardinessDays);
+
+    //             // Balance couldn't absorb the full deduction — excess goes to payroll, not the system
+    //             if ($unmetDays > 0) {
+    //                 ActivityLog::create([
+    //                     'user_id'      => $uploadedBy,
+    //                     'action'       => 'leave_credit.tardiness_exceeded_balance',
+    //                     'description'  => "{$employee->first_name} {$employee->surname}: {$unmetDays} day(s) of tardiness exceeded available VL balance for {$year} — forward to payroll for salary deduction.",
+    //                     'subject_type' => 'LeaveCredit',
+    //                     'subject_id'   => $vlCredit->id,
+    //                 ]);
+    //             }
+    //         }
+    //     }
+
+    //     if ($slConfig) {
+    //         $slCredit = LeaveCredit::firstOrCreate(
+    //             ['employee_id' => $employee->id, 'leave_configuration_id' => $slConfig->id, 'year' => $year],
+    //             ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
+    //         );
+    //         $slCredit->total_credits += $computation['sl_earned'];
+    //         $slCredit->last_updated = now();
+    //         $slCredit->save();
+    //     }
+    // }
 
     // private function updateLeaveCredits(Employee $employee, int $year, array $computation)
     // {
