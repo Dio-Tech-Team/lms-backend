@@ -22,6 +22,7 @@ class LeaveConfigurationController extends Controller
             'fixed_days',
             'monthly_credit',
             'credit_type',
+            'grant_type',
             'description',
             'is_active'
         ])
@@ -47,6 +48,7 @@ class LeaveConfigurationController extends Controller
             'fixed_days'     => 'nullable|numeric',
             'monthly_credit' => 'nullable|numeric',
             'credit_type'    => 'nullable|in:fixed,monthly',
+            'grant_type'        => 'nullable|in:annual_auto,event_manual',
             'description'    => 'nullable|string',
         ]);
         // $validated['application_to'] = implode(',', $request->application_to);
@@ -72,6 +74,7 @@ class LeaveConfigurationController extends Controller
                 'fixed_days',
                 'monthly_credit',
                 'credit_type',
+                'grant_type',
                 'description'
             ])
         ], 201);
@@ -90,6 +93,7 @@ class LeaveConfigurationController extends Controller
             'fixed_days',
             'monthly_credit',
             'credit_type',
+            'grant_type',
             'description',
             'is_active',
         ])->findOrFail($id);
@@ -110,6 +114,7 @@ class LeaveConfigurationController extends Controller
             'fixed_days'     => 'nullable|numeric',
             'monthly_credit' => 'nullable|numeric',
             'credit_type'    => 'nullable|in:fixed,monthly',
+            'grant_type'        => 'nullable|in:annual_auto,event_manual',
             'description'    => 'nullable|string',
         ]);
         // if ($request->has('application_to')) {
@@ -139,6 +144,7 @@ class LeaveConfigurationController extends Controller
                 'fixed_days',
                 'monthly_credit',
                 'credit_type',
+                'grant_type',
                 'description'
             ])
         ]);

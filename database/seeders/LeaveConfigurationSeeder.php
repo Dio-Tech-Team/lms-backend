@@ -67,6 +67,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'fixed_days'     => 105,
                 'monthly_credit' => null,
                 'credit_type'    => 'fixed',
+                'grant_type'     => 'event_manual',
                 'description'    => 'For female employees. Requires proof of pregnancy and, if applicable, accomplished Notice of Allocation of Maternity Leave Credits (CS Form No. 6a)',
             ],
             [
@@ -78,6 +79,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'fixed_days'     => 7,
                 'monthly_credit' => null,
                 'credit_type'    => 'fixed',
+                'grant_type'     => 'event_manual',
                 'description'    => 'For male employees. Requires proof of child\'s delivery e.g. birth certificate, medical certificate and marriage contract',
             ],
             [
@@ -111,6 +113,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'fixed_days'     => 180,
                 'monthly_credit' => null,
                 'credit_type'    => 'fixed',
+                'grant_type'     => 'event_manual',
                 'description'    => 'Up to 6 months. Subject to agency internal requirements and a contract between the agency head/authorized representative and the employee',
             ],
             [
@@ -122,6 +125,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'fixed_days'     => 10,
                 'monthly_credit' => null,
                 'credit_type'    => 'fixed',
+                'grant_type'     => 'event_manual',
                 'description'    => 'For woman employees under RA 9262. Requires BPO/TPO/PPO or barangay/prosecutor/court certification that a case is pending',
             ],
             [
@@ -133,6 +137,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'fixed_days'     => 180,
                 'monthly_credit' => null,
                 'credit_type'    => 'fixed',
+                'grant_type'     => 'event_manual',
                 'description'    => 'Up to 6 months. Requires application within 1 week of the accident, supporting reports, medical certificate, and written physician concurrence',
             ],
             [
@@ -144,6 +149,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'fixed_days'     => 60,
                 'monthly_credit' => null,
                 'credit_type'    => 'fixed',
+                'grant_type'     => 'event_manual',
                 'description'    => 'Up to 2 months for women who undergo gynecological surgery, under RA 9710. Filed at least 5 days prior, accompanied by a medical certificate',
             ],
             [
@@ -155,6 +161,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'fixed_days'     => 5,
                 'monthly_credit' => null,
                 'credit_type'    => 'fixed',
+                'grant_type'     => 'event_manual',
                 'description'    => 'Up to 5 working days within one year of a declared calamity in the employee\'s area of residence, subject to head of agency validation',
             ],
             [
@@ -166,6 +173,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'fixed_days'     => null,
                 'monthly_credit' => null,
                 'credit_type'    => 'fixed',
+                'grant_type'     => 'event_manual',
                 'description'    => 'Duration per the Pre-Adoptive Placement Authority (PAPA) issued by DSWD — requires authenticated copy',
             ],
         ];

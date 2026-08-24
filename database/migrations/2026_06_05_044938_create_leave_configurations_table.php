@@ -22,6 +22,7 @@ return new class extends Migration
             $table->decimal('fixed_days', 8, 2)->nullable();
             $table->decimal('monthly_credit', 8, 2)->nullable();
             $table->enum('credit_type', ['fixed', 'monthly'])->default('fixed');
+            $table->enum('grant_type', ['annual_auto', 'event_manual'])->default('annual_auto'); // ADD THIS LINE
             $table->text('description')->nullable();
             $table->boolean('is_active')->default(true)->index();
             // Add this column: allows you to set a cap on straight days (e.g., 3.00)

@@ -94,6 +94,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
         // Credit Admin
         Route::post('employees/leave-credits/initialize-all', [LeaveCreditController::class, 'initializeAllCredits']);
+        Route::post('/leave-credits/grant', [LeaveCreditController::class, 'grantLeave']);
 
         // Attendance Admin
         Route::post('attendance/upload', [AttendanceController::class, 'upload']);

@@ -15,6 +15,7 @@ class LeaveConfiguration extends Model
         'fixed_days',
         'monthly_credit',
         'credit_type',
+        'grant_type',
         'description',
         'is_active',
     ];

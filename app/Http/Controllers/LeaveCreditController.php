@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\LeaveCredit;
 use App\Models\Employee;
 use App\Models\LeaveConfiguration;
+use App\Models\LeaveRecord;
 use App\Models\ActivityLog;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -34,6 +35,21 @@ class LeaveCreditController extends Controller
             ->where('leave_credits.year', now()->year) // uses year index!
             ->get();
 
+        // Attach FL usage-this-year, since FL's own credit row is just a 0/0/0 placeholder
+        $flCredit = $credits->firstWhere('code', 'FL');
+        if ($flCredit) {
+            $flConfig = LeaveConfiguration::where('code', 'FL')->first();
+            $flDaysTaken = $flConfig
+                ? LeaveRecord::where('employee_id', $employeeId)
+                ->where('leave_configuration_id', $flConfig->id)
+                ->whereYear('start_date', now()->year)
+                ->sum('days_taken')
+                : 0;
+
+            $flCredit->fl_days_taken = (float) $flDaysTaken;
+            $flCredit->fl_days_cap = 5;
+        }
+
         return response()->json([
             'employee' => $employee->first_name . ' ' . $employee->surname,
             'year'     => now()->year,
@@ -60,6 +76,22 @@ class LeaveCreditController extends Controller
             if ($employee->employment_status === 'job_order') {
                 return $config->code === 'WL';
             }
+            // 2. Skip event-triggered leave types — these are granted manually by HR, not auto-initialized
+            if ($config->grant_type === 'event_manual') {
+                return false;
+            }
+            // // 3. SEX-BASED ELIGIBILITY GUARD
+            // $femaleOnly = ['ML', 'VAWC', 'SLB', 'STL']; // Adjust codes as per your DB
+            // $maleOnly   = ['PTL'];
+
+            // $sex = strtolower($employee->sex ?? '');
+
+            // if (in_array($config->code, $femaleOnly) && $sex !== 'female') {
+            //     return false;
+            // }
+            // if (in_array($config->code, $maleOnly) && $sex !== 'male') {
+            //     return false;
+            // }
 
             // Replace line 66 with this block:
             $appTo = $config->application_to;
@@ -97,8 +129,22 @@ class LeaveCreditController extends Controller
                         ->first();
 
                     $startingCredits = $previousRecord ? $previousRecord->remaining_balance : 0;
+                    if ($config->code === 'VL') {
+                        $employedFullPreviousYear = Carbon::parse($employee->date_hired)
+                            ->lte(Carbon::create($previousYear, 1, 1));
+                        if ($employedFullPreviousYear) {
+                            $flConfig = LeaveConfiguration::where('code', 'FL')->first();
+                            if ($flConfig) {
+                                $flDaysTaken = \App\Models\LeaveRecord::where('employee_id', $employeeId)
+                                    ->where('leave_configuration_id', $flConfig->id)
+                                    ->whereYear('start_date', $previousYear)
+                                    ->sum('days_taken');
+                                $flShortfall = max(0, 5 - $flDaysTaken);
+                                $startingCredits = max(0, $startingCredits - $flShortfall);
+                            }
+                        }
+                    }
                 }
-
                 $creditsToInsert[] = [
                     'employee_id'            => $employeeId,
                     'leave_configuration_id' => $config->id,
@@ -153,6 +199,7 @@ class LeaveCreditController extends Controller
 
         $creditsToInsert = [];
 
+        $flConfig = LeaveConfiguration::where('code', 'FL')->first();
         foreach ($employees as $employee) {
 
             // Inside initializeAllCredits() method
@@ -162,6 +209,22 @@ class LeaveCreditController extends Controller
                 if ($employee->employment_status === 'job_order') {
                     return $config->code === 'WL';
                 }
+                // 2. Skip event-triggered leave types — these are granted manually by HR, not auto-initialized
+                if ($config->grant_type === 'event_manual') {
+                    return false;
+                }
+                // // 3. SEX-BASED ELIGIBILITY GUARD
+                // $femaleOnly = ['ML', 'VAWC', 'SLB', 'STL']; // Adjust codes as per your DB
+                // $maleOnly   = ['PTL'];
+
+                // $sex = strtolower($employee->sex ?? '');
+
+                // if (in_array($config->code, $femaleOnly) && $sex !== 'female') {
+                //     return false;
+                // }
+                // if (in_array($config->code, $maleOnly) && $sex !== 'male') {
+                //     return false;
+                // }
 
                 return in_array('all', $config->application_to) ||
                     in_array($employee->employment_status, $config->application_to);
@@ -184,6 +247,20 @@ class LeaveCreditController extends Controller
                     } else if ($config->can_carry_over) {
                         // Retrieve carry over balance in-memory
                         $startingCredits = $previousBalancesMap[$employee->id][$config->id] ?? 0;
+                        if ($config->code === 'VL') {
+                            $employedFullPreviousYear = Carbon::parse($employee->date_hired)
+                                ->lte(Carbon::create($previousYear, 1, 1));
+                            if ($employedFullPreviousYear) {
+                                if ($flConfig) {
+                                    $flDaysTaken = \App\Models\LeaveRecord::where('employee_id', $employee->id)
+                                        ->where('leave_configuration_id', $flConfig->id)
+                                        ->whereYear('start_date', $previousYear)
+                                        ->sum('days_taken');
+                                    $flShortfall = max(0, 5 - $flDaysTaken);
+                                    $startingCredits = max(0, $startingCredits - $flShortfall);
+                                }
+                            }
+                        }
                     }
 
                     $creditsToInsert[] = [
@@ -218,6 +295,98 @@ class LeaveCreditController extends Controller
         return response()->json([
             'message' => "Successfully initialized all leave credits for the year {$targetYear}!",
         ]);
+    }
+    public function grantLeave(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $validated = $request->validate([
+            'employee_id'             => 'required|exists:employees,id',
+            'leave_configuration_id'  => 'required|exists:leave_configurations,id',
+            'year'                    => 'required|integer|min:2020|max:2099',
+            'days'                    => 'nullable|numeric|min:0.5',
+            'remarks'                 => 'nullable|string',
+        ]);
+
+        $employee = Employee::findOrFail($validated['employee_id']);
+        $config = LeaveConfiguration::findOrFail($validated['leave_configuration_id']);
+
+        if ($config->grant_type !== 'event_manual') {
+            return response()->json([
+                'message' => "{$config->name} is auto-initialized annually and cannot be granted manually."
+            ], 422);
+        }
+
+        if (!$config->is_active) {
+            return response()->json([
+                'message' => 'This leave type is no longer active.'
+            ], 422);
+        }
+
+        // Sex-based eligibility — mirrors LeaveApplicationController::validateLeaveEligibility()
+        $femaleOnly = ['ML', 'VAWC', 'SLB'];
+        $maleOnly   = ['PTL'];
+
+        if (in_array($config->code, $femaleOnly) && $employee->sex !== 'female') {
+            return response()->json([
+                'message' => "{$config->name} is only available for female employees."
+            ], 422);
+        }
+        if (in_array($config->code, $maleOnly) && $employee->sex !== 'male') {
+            return response()->json([
+                'message' => "{$config->name} is only available for male employees."
+            ], 422);
+        }
+
+        $days = $validated['days'] ?? $config->fixed_days;
+
+        if ($days === null) {
+            return response()->json([
+                'message' => "{$config->name} has no default day amount configured — please specify 'days' explicitly."
+            ], 422);
+        }
+
+        $existingGrant = LeaveCredit::where('employee_id', $employee->id)
+            ->where('leave_configuration_id', $config->id)
+            ->where('year', $validated['year'])
+            ->first();
+
+        if ($existingGrant) {
+            return response()->json([
+                'message'        => "{$employee->first_name} {$employee->surname} already has a {$config->name} grant for {$validated['year']} ({$existingGrant->remaining_balance} day(s) remaining). Use the Edit Balance option if this needs to change.",
+                'existing_grant' => $existingGrant,
+            ], 409);
+        }
+
+        $credit = DB::transaction(function () use ($employee, $config, $validated, $days, $user) {
+            $credit = LeaveCredit::create([
+                'employee_id'            => $employee->id,
+                'leave_configuration_id' => $config->id,
+                'year'                   => $validated['year'],
+                'total_credits'          => $days,
+                'used_credits'           => 0,
+                'remaining_balance'      => $days,
+                'last_updated'           => now(),
+            ]);
+
+            ActivityLog::create([
+                'user_id'      => $user->id,
+                'action'       => 'leave_credit.granted',
+                'description'  => "Granted {$days} day(s) of {$config->name} to {$employee->first_name} {$employee->surname} for {$validated['year']}" . (($validated['remarks'] ?? '') ? " — {$validated['remarks']}" : ''),
+                'subject_type' => 'LeaveCredit',
+                'subject_id'   => $credit->id,
+            ]);
+
+            return $credit;
+        });
+
+        return response()->json([
+            'message' => "{$config->name} granted successfully",
+            'data'    => $credit,
+        ], 201);
     }
     // LeaveCreditController.php
     public function initializeCredits(Request $request, $employeeId)

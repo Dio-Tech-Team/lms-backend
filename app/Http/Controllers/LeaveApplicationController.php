@@ -91,8 +91,22 @@ class LeaveApplicationController extends Controller
             'is_paper_submission'    => 'nullable|boolean',
         ]);
 
-        // Backend is the source of truth for days_applied — ignore whatever the client sent
-        $validated['days_applied'] = $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
+        // // Backend is the source of truth for days_applied — ignore whatever the client sent
+        // $validated['days_applied'] = $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
+
+        // if ($validated['days_applied'] < 0.5) {
+        //     return response()->json([
+        //         'message' => 'The selected date range contains no working days.'
+        //     ], 422);
+        // }
+        $config = LeaveConfiguration::findOrFail($request->leave_configuration_id);
+
+        if ($config->grant_type === 'event_manual') {
+            $validated['days_applied'] = Carbon::parse($validated['start_date'])
+                ->diffInDays(Carbon::parse($validated['end_date'])) + 1;
+        } else {
+            $validated['days_applied'] = $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
+        }
 
         if ($validated['days_applied'] < 0.5) {
             return response()->json([
@@ -101,7 +115,6 @@ class LeaveApplicationController extends Controller
         }
 
         $user = $request->user();
-        $config = LeaveConfiguration::findOrFail($request->leave_configuration_id);
 
         if (!$config->is_active) {
             return response()->json([
@@ -192,7 +205,7 @@ class LeaveApplicationController extends Controller
         }
 
         // 1. Validation Logic
-        if (in_array($config->code, ['WL', 'SPL'])) {
+        if (in_array($config->code, ['WL', 'SPL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'])) {
             if ($hasInsufficientBalance) {
                 return response()->json([
                     'message' => 'Insufficient balance for ' . $config->name . '. You cannot file this leave.'
@@ -200,6 +213,18 @@ class LeaveApplicationController extends Controller
             }
         }
         if ($config->code === 'FL') {
+            // Cap: max 5 days of FL per calendar year, across all applications
+            $flDaysAlreadyTaken = LeaveRecord::where('employee_id', $employee->id)
+                ->where('leave_configuration_id', $config->id)
+                ->whereYear('start_date', $year)
+                ->sum('days_taken');
+
+            if ($flDaysAlreadyTaken + $validated['days_applied'] > 5) {
+                return response()->json([
+                    'message' => "Forced Leave is capped at 5 days per year. You have {$flDaysAlreadyTaken} day(s) already recorded this year."
+                ], 422);
+            }
+
             $vlCredit = LeaveCredit::whereHas('leaveConfiguration', function ($query) {
                 $query->where('code', 'VL');
             })
@@ -303,10 +328,13 @@ class LeaveApplicationController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            $correctDays = $this->calculateWorkingDays($application->start_date, $application->end_date);
+            // $correctDays = $this->calculateWorkingDays($application->start_date, $application->end_date);
+            $correctDays = ($config->code && $config->grant_type === 'event_manual')
+                ? Carbon::parse($application->start_date)->diffInDays(Carbon::parse($application->end_date)) + 1
+                : $this->calculateWorkingDays($application->start_date, $application->end_date);
 
             // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
-            if (in_array($config->code, ['WL', 'SPL', 'FL'])) {
+            if (in_array($config->code, ['WL', 'SPL', 'FL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'])) {
                 // if (!$credit || $credit->remaining_balance < $application->days_applied) {
                 if (!$credit || $credit->remaining_balance < $correctDays) {
                     return ['error' => 'Insufficient balance for ' . $config->name];
