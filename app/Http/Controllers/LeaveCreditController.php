@@ -445,6 +445,28 @@ class LeaveCreditController extends Controller
     }
 
     //Mobile
+    // public function getLeaveCreditBalances(Request $request)
+    // {
+    //     $employee = $request->user()->employee;
+
+    //     if (!$employee) {
+    //         return response()->json(['message' => 'Employee profile not found'], 404);
+    //     }
+
+    //     $balances = LeaveCredit::join('leave_configurations', 'leave_credits.leave_configuration_id', '=', 'leave_configurations.id')
+    //         ->where('leave_credits.employee_id', $employee->id)
+    //         ->where('leave_credits.year', now()->year)
+    //         ->where('leave_configurations.is_active', true)
+    //         ->select(
+    //             'leave_configurations.id as leave_configuration_id',
+    //             'leave_configurations.name',
+    //             'leave_configurations.code',
+    //             'leave_credits.remaining_balance'
+    //         )
+    //         ->get();
+
+    //     return response()->json($balances);
+    // }
     public function getLeaveCreditBalances(Request $request)
     {
         $employee = $request->user()->employee;
@@ -461,9 +483,24 @@ class LeaveCreditController extends Controller
                 'leave_configurations.id as leave_configuration_id',
                 'leave_configurations.name',
                 'leave_configurations.code',
+                'leave_configurations.grant_type',
                 'leave_credits.remaining_balance'
             )
             ->get();
+
+        // FL usage lives on VL, not on FL's own placeholder credit row —
+        // override remaining_balance with the real cap-based figure so
+        // mobile's generic "days > remainingBalance" check works correctly.
+        $flRow = $balances->firstWhere('code', 'FL');
+        if ($flRow) {
+            $flConfig = \App\Models\LeaveConfiguration::where('code', 'FL')->first();
+            $flDaysTaken = \App\Models\LeaveRecord::where('employee_id', $employee->id)
+                ->where('leave_configuration_id', $flConfig->id)
+                ->whereYear('start_date', now()->year)
+                ->sum('days_taken');
+
+            $flRow->remaining_balance = max(0, 5 - $flDaysTaken);
+        }
 
         return response()->json($balances);
     }
