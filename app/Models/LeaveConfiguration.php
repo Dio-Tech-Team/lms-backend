@@ -28,6 +28,9 @@ class LeaveConfiguration extends Model
         'monthly_credit' => 'decimal:2',
         'is_active' => 'boolean'
     ];
+    protected $attributes = [
+        'application_to' => '["all"]',
+    ];
 
     // public function leaves(){
     //     return $this->hasMany(LeaveCredit::class);
