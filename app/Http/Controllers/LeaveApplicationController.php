@@ -65,8 +65,14 @@ class LeaveApplicationController extends Controller
             ->when($request->department_id, function ($query) use ($request) {
                 $query->where('employees.department_id', $request->department_id);
             })
+            // ->when($request->year, function ($query) use ($request) {
+            //     $query->whereYear('leave_applications.applied_at', $request->year);
+            // })
             ->when($request->year, function ($query) use ($request) {
                 $query->whereYear('leave_applications.applied_at', $request->year);
+            })
+            ->when($request->month, function ($query) use ($request) {
+                $query->whereMonth('leave_applications.applied_at', $request->month);
             })
             ->when($request->search, function ($query) use ($request) {
                 $query->where(function ($q) use ($request) {

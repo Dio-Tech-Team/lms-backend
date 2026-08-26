@@ -45,8 +45,14 @@ class LeaveRecordController extends Controller
                 });
             })
 
+            // ->when($request->filled('year'), function ($query) use ($request) {
+            //     $query->whereYear('leave_records.start_date', $request->year);
+            // })
             ->when($request->filled('year'), function ($query) use ($request) {
                 $query->whereYear('leave_records.start_date', $request->year);
+            })
+            ->when($request->filled('month'), function ($query) use ($request) {
+                $query->whereMonth('leave_records.start_date', $request->month);
             })
             ->when($request->filled('leave_type'), function ($query) use ($request) {
                 $query->where('leave_configurations.code', $request->leave_type);
@@ -188,6 +194,7 @@ class LeaveRecordController extends Controller
     public function summary(Request $request)
     {
         $year = $request->year ?? now()->year;
+        $month = $request->month;
 
         $summary = Employee::select([
             'employees.id',
@@ -197,15 +204,21 @@ class LeaveRecordController extends Controller
             'departments.name as department_name',
         ])
             ->join('departments', 'employees.department_id', '=', 'departments.id')
-            ->withSum(['leaveRecords as vl_used' => function ($query) use ($year) {
+            ->withSum(['leaveRecords as vl_used' => function ($query) use ($year, $month) {
                 $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
                     ->where('leave_configurations.code', 'VL')
-                    ->whereYear('leave_records.created_at', $year);
+                    ->whereYear('leave_records.created_at', $year)
+                    ->when($month, function ($q) use ($month) {
+                        $q->whereMonth('leave_records.created_at', $month);
+                    });
             }], 'days_taken')
-            ->withSum(['leaveRecords as sl_used' => function ($query) use ($year) {
+            ->withSum(['leaveRecords as sl_used' => function ($query) use ($year, $month) {
                 $query->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
                     ->where('leave_configurations.code', 'SL')
-                    ->whereYear('leave_records.created_at', $year);
+                    ->whereYear('leave_records.created_at', $year)
+                    ->when($month, function ($q) use ($month) {
+                        $q->whereMonth('leave_records.created_at', $month);
+                    });
             }], 'days_taken')
             ->where('employees.is_active', true)
             ->when($request->search, function ($query) use ($request) {
