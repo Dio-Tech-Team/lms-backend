@@ -21,15 +21,8 @@ use App\Http\Controllers\{
 };
 
 Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
-// Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
-//     $request->fulfill();
-//     return response()->json(['message' => 'Email verified successfully.']);
-// })->middleware(['auth:sanctum', 'signed'])->name('verification.verify');
-// Remove 'auth:sanctum' from this route
-// Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
-//     $request->fulfill();
-//     return response()->json(['message' => 'Email verified successfully.']);
-// })->middleware(['signed'])->name('verification.verify'); // <-- Removed 'auth:sanctum'
+Route::middleware('throttle:5,1')->post('/verify-otp', [AuthController::class, 'verifyOtp']);
+Route::middleware('throttle:5,1')->post('/resend-otp', [AuthController::class, 'resendOtp']);
 
 // 2. AUTHENTICATED ROUTES
 Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {

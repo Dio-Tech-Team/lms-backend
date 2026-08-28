@@ -23,7 +23,7 @@ class UserSeeder extends Seeder
         User::updateOrCreate(
             ['username' => 'superadmin'],
             [
-                'email'    => 'superadmin@gmail.com',
+                'email'    => 'leavesyncadmin@example.com',
                 'password' => Hash::make('@Password123'),
                 'role'     => 'super_admin',
                 'must_change_password' => true,
@@ -33,15 +33,13 @@ class UserSeeder extends Seeder
         User::updateOrCreate(
             ['username' => 'hradmin'],
             [
-                'email' => 'hradmin@gmail.com',
+                'email' => 'leavesynchr@gmail.com',
                 'password' => Hash::make('@Password123'),
                 'role' => 'hr_admin',
-                'must_change_password' => false,
-                // 'email_verified_at' => now() // Add this line
+                'must_change_password' => true,
             ]
+
         );
-
-
         $employees = [
             ['Sammy', 'Cruz'],
             ['Althea', 'De Leon'],
@@ -100,7 +98,7 @@ class UserSeeder extends Seeder
             User::updateOrCreate(
                 ['username' => $username],
                 [
-                    'email' => $username . '@gmail.com',
+                    'email' => $username . '@example.com',
                     'password' => Hash::make('@Password123'),
                     'role' => 'employee',
                     'must_change_password' => true,
