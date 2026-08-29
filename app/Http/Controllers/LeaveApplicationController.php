@@ -436,6 +436,13 @@ class LeaveApplicationController extends Controller
     public function cancel(Request $request, $id)
     {
         $application = LeaveApplication::findOrFail($id);
+        $user = $request->user();
+
+        if (!$this->isAdmin($user) && $application->employee_id !== $user->employee?->id) {
+            return response()->json([
+                'message' => 'Unauthorized: You can only cancel your own leave applications.'
+            ], 403);
+        }
 
         if ($application->status !== 'pending') {
             return response()->json([
@@ -445,11 +452,12 @@ class LeaveApplicationController extends Controller
 
         $application->update([
             'status'      => 'cancelled',
-            'reviewed_by' => $request->user()->id,
+            'reviewed_by' => $this->isAdmin($user) ? $user->id : null,
             'reviewed_at' => now(),
         ]);
+
         ActivityLog::create([
-            'user_id'      => $request->user()->id,
+            'user_id'      => $user->id,
             'action'       => 'leave_application.cancelled',
             'description'  => "Cancelled leave application #{$application->id}",
             'subject_type' => 'LeaveApplication',

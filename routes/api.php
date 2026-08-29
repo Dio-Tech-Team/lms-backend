@@ -54,6 +54,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/', [LeaveApplicationController::class, 'store']);
         Route::get('/{id}', [LeaveApplicationController::class, 'show']);
         Route::get('/{id}/pdf', [LeaveApplicationController::class, 'generatePdf']);
+    Route::post('/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
     });
 
 
@@ -78,7 +79,6 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         // Leave Application Admin Actions
         Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
         Route::post('leave-applications/{id}/reject', [LeaveApplicationController::class, 'reject']);
-        Route::post('leave-applications/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
 
         // Leave Records (HR Management)
         Route::get('leave-records/summary', [LeaveRecordController::class, 'summary']);
