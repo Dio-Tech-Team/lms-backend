@@ -18,6 +18,7 @@ use App\Http\Controllers\{
     LeaveMonetizationController,
     HolidayController,
     PositionController,
+    ReportController
 };
 
 Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
@@ -115,6 +116,12 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
         Route::post('leave-monetizations/{id}/approve', [LeaveMonetizationController::class, 'approve']);
         Route::post('leave-monetizations/{id}/reject', [LeaveMonetizationController::class, 'reject']);
+
+        Route::prefix('reports')->group(function () {
+            Route::get('/employee-masterlist', [ReportController::class, 'employeeMasterlist']);
+            Route::get('/leave-balances', [ReportController::class, 'leaveBalances']);
+            Route::get('/leave-utilization', [ReportController::class, 'leaveUtilization']);
+        });
     });
 
     // 4. SUPER ADMIN ONLY ROUTES
