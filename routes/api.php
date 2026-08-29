@@ -54,7 +54,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/', [LeaveApplicationController::class, 'store']);
         Route::get('/{id}', [LeaveApplicationController::class, 'show']);
         Route::get('/{id}/pdf', [LeaveApplicationController::class, 'generatePdf']);
-    Route::post('/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
+        Route::post('/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
     });
 
 
@@ -64,6 +64,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::prefix('leave-monetizations')->group(function () {
         Route::get('/', [LeaveMonetizationController::class, 'index']);
         Route::post('/', [LeaveMonetizationController::class, 'store']);
+        Route::post('/{id}/cancel', [LeaveMonetizationController::class, 'cancel']);
     });
 
     // 3. HR ADMIN ONLY ROUTES (Using your new Middleware)

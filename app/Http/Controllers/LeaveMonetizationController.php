@@ -40,9 +40,18 @@ class LeaveMonetizationController extends Controller
             'employees.surname',
             'leave_configurations.name as leave_type_name',
             'leave_configurations.code as leave_type_code',
+            'leave_credits.remaining_balance',
         ])
             ->join('employees', 'leave_monetizations.employee_id', '=', 'employees.id')
             ->join('leave_configurations', 'leave_monetizations.leave_configuration_id', '=', 'leave_configurations.id')
+            ->leftJoin('leave_credits', function ($join) {
+                // Left, not inner — a request whose credit row is missing
+                // should still appear in the list, just without a balance.
+                $join->on('leave_credits.employee_id', '=', 'leave_monetizations.employee_id')
+                    ->on('leave_credits.leave_configuration_id', '=', 'leave_monetizations.leave_configuration_id')
+                    ->whereColumn('leave_credits.year', DB::raw('YEAR(leave_monetizations.applied_at)'));
+            })
+
             ->when(!$this->isAdmin($user), function ($q) use ($user) {
                 $q->where('leave_monetizations.employee_id', $user->employee?->id);
             })
@@ -218,6 +227,41 @@ class LeaveMonetizationController extends Controller
             'message' => 'Monetization request submitted successfully',
             'data'    => $monetization,
         ], 201);
+    }
+    /// Withdraws a still-pending request. Pending never deducted credits,
+    /// so there is nothing to restore — this only flips the status.
+    public function cancel(Request $request, $id)
+    {
+        $monetization = LeaveMonetization::findOrFail($id);
+        $user = $request->user();
+
+        if (!$this->isAdmin($user) && $monetization->employee_id !== $user->employee?->id) {
+            return response()->json([
+                'message' => 'Unauthorized: You can only cancel your own monetization requests.'
+            ], 403);
+        }
+
+        if ($monetization->status !== 'pending') {
+            return response()->json([
+                'message' => 'Request is already ' . $monetization->status,
+            ], 400);
+        }
+
+        $monetization->update([
+            'status'      => 'cancelled',
+            'reviewed_by' => $this->isAdmin($user) ? $user->id : null,
+            'reviewed_at' => now(),
+        ]);
+
+        ActivityLog::create([
+            'user_id'      => $user->id,
+            'action'       => 'leave_monetization.cancelled',
+            'description'  => "Cancelled monetization request #{$monetization->id}",
+            'subject_type' => 'LeaveMonetization',
+            'subject_id'   => $monetization->id,
+        ]);
+
+        return response()->json(['message' => 'Monetization request cancelled successfully']);
     }
 
     public function approve(Request $request, $id)
