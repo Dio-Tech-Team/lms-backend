@@ -705,24 +705,31 @@ class EmployeeController extends Controller
                     'earned'      => 0,
                     'abs_wp'      => 0,
                     'abs_wop'     => 0,
-                    'used'        => round((float) $mon->days_monetized, 3),
+                    'used'        => round((float) ($mon->approved_days ?? $mon->days_monetized), 3),
                 ];
             }
         }
 
-        // Opening balance / correction now built LAST, using the earliest
-        // date among all other entries so this always sorts first regardless
-        // of whether attendance was backfilled earlier than date_hired
+        // Opening balance / correction built LAST so the entries above are
+        // already in place; the entry itself is dated to the day before the
+        // card's year, which always sorts first since everything else is
+        // scoped to $year.
         if ($config && $credit) {
-            $earliestOtherDate = collect($entries)->min('sort_date');
-            $baseDate = $earliestOtherDate
-                ? $earliestOtherDate->copy()->subDay()
-                : \Carbon\Carbon::parse($employee->date_hired)->subDay();
-
-            $hireYear = \Carbon\Carbon::parse($employee->date_hired)->year;
+            // Anchored to the day before the card's year, not to the earliest
+            // other entry — that was computed per type, so VL (which had
+            // monetizations in 2026) and SL (which had nothing, so it fell back
+            // to date_hired in 2021) ended up with opening-balance lines five
+            // years apart for the same onboarding event. Every other entry is
+            // scoped to $year, so this always sorts first.
+            $baseDate = \Carbon\Carbon::create($year, 1, 1)->subDay();
             if ((float) $credit->opening_balance > 0) {
+                // Earliest year with an actual opening balance, not merely the
+                // earliest year with a row — employees hired years before
+                // onboarding have empty 0/0/0 placeholder rows for those years,
+                // and gating on those suppressed the entry entirely.
                 $earliestCreditYear = \App\Models\LeaveCredit::where('employee_id', $employee->id)
                     ->where('leave_configuration_id', $config->id)
+                    ->where('opening_balance', '>', 0)
                     ->min('year');
                 if ($year === $earliestCreditYear) {
                     $entries[] = [
@@ -758,7 +765,8 @@ class EmployeeController extends Controller
                             'sort_date'   => $correctionDate,
                             'period'      => $correctionDate->format('m-d-y'),
                             'particulars' => "Balance correction"
-                                . ($delta > 0 ? ' (increase)' : ' (decrease)'),
+                                . ($delta > 0 ? ' (increase)' : ' (decrease)')
+                                . " by {$actor}",
                             'earned'      => $delta > 0 ? $delta : 0,
                             'abs_wp'      => 0,
                             'abs_wop'     => 0,

@@ -10,7 +10,9 @@ class LeaveMonetization extends Model
         'employee_id',
         'leave_configuration_id',
         'days_monetized',
+        'approved_days',
         'reason',
+        'rejection_reason',
         'status',
         'filed_by',
         'applied_at',
@@ -21,6 +23,7 @@ class LeaveMonetization extends Model
 
     protected $casts = [
         'days_monetized' => 'decimal:3',
+        'approved_days'  => 'decimal:3',
         'applied_at'      => 'datetime',
         'reviewed_at'     => 'datetime',
     ];

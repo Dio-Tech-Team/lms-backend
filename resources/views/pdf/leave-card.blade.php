@@ -56,18 +56,18 @@
         th,
         td {
             border: 1px solid #999;
-            padding: 9px 8px;
+            padding: 7px 5px;
             text-align: center;
         }
 
         th {
             background: #eee;
-            font-size: 10px;
+            font-size: 9px;
             text-transform: uppercase;
         }
 
         td {
-            font-size: 11px;
+            font-size: 10.5px;
         }
 
         .left {
@@ -157,15 +157,17 @@
             <tr>
                 <th rowspan="2">Period</th>
                 <th rowspan="2">Particulars</th>
-                <th colspan="4" class="group">Vacation Leave</th>
-                <th colspan="4" class="group">Sick Leave</th>
+                <th colspan="5" class="group">Vacation Leave</th>
+                <th colspan="5" class="group">Sick Leave</th>
             </tr>
             <tr>
                 <th>Earned</th>
+                <th>Used</th>
                 <th>Abs. Und. W/P</th>
                 <th>Balance</th>
                 <th>Abs. Und. WOP</th>
                 <th>Earned</th>
+                <th>Used</th>
                 <th>Abs. Und. W/P</th>
                 <th>Balance</th>
                 <th>Abs. Und. WOP</th>
@@ -180,6 +182,9 @@
                         {{ isset($row['vl']) && $row['vl']['earned'] > 0 ? number_format($row['vl']['earned'], 3) : '' }}
                     </td>
                     <td class="num">
+                        {{ isset($row['vl']) && $row['vl']['used'] > 0 ? number_format($row['vl']['used'], 3) : '' }}
+                    </td>
+                    <td class="num">
                         {{ isset($row['vl']) && $row['vl']['abs_wp'] > 0 ? number_format($row['vl']['abs_wp'], 3) : '' }}
                     </td>
                     <td class="num">{{ isset($row['vl']) ? number_format($row['vl']['balance'], 3) : '' }}</td>
@@ -188,6 +193,9 @@
                     </td>
                     <td class="num">
                         {{ isset($row['sl']) && $row['sl']['earned'] > 0 ? number_format($row['sl']['earned'], 3) : '' }}
+                    </td>
+                    <td class="num">
+                        {{ isset($row['sl']) && $row['sl']['used'] > 0 ? number_format($row['sl']['used'], 3) : '' }}
                     </td>
                     <td class="num">
                         {{ isset($row['sl']) && $row['sl']['abs_wp'] > 0 ? number_format($row['sl']['abs_wp'], 3) : '' }}
@@ -199,7 +207,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="10" style="text-align:center;color:#999;">No leave history yet</td>
+                    <td colspan="12" style="text-align:center;color:#999;">No leave history yet</td>
                 </tr>
             @endforelse
         </tbody>

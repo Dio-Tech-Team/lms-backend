@@ -13,7 +13,9 @@ return new class extends Migration
             $table->foreignId('employee_id')->constrained('employees')->onDelete('cascade');
             $table->foreignId('leave_configuration_id')->constrained('leave_configurations')->onDelete('cascade');
             $table->decimal('days_monetized', 8, 3);
+            $table->decimal('approved_days', 8, 3)->nullable();
             $table->text('reason')->nullable();
+            $table->text('rejection_reason')->nullable();
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->index('status');
             $table->foreignId('filed_by')->nullable()->constrained('users')->nullOnDelete();

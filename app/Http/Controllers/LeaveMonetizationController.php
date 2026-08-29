@@ -30,7 +30,9 @@ class LeaveMonetizationController extends Controller
             'leave_monetizations.employee_id',
             'leave_monetizations.leave_configuration_id',
             'leave_monetizations.days_monetized',
+            'leave_monetizations.approved_days',
             'leave_monetizations.reason',
+            'leave_monetizations.rejection_reason',
             'leave_monetizations.status',
             'leave_monetizations.applied_at',
             'leave_monetizations.reviewed_at',
@@ -174,6 +176,7 @@ class LeaveMonetizationController extends Controller
                     'employee_id'            => $employee->id,
                     'leave_configuration_id' => $config->id,
                     'days_monetized'         => $validated['days_monetized'],
+                    'approved_days'          => $validated['days_monetized'],
                     'reason'                 => $validated['reason'] ?? 'Filed by admin',
                     'status'                 => 'approved',
                     'filed_by'               => $request->user()->id,
@@ -225,7 +228,15 @@ class LeaveMonetizationController extends Controller
             return response()->json(['message' => 'Request is already ' . $monetization->status], 400);
         }
 
-        $result = DB::transaction(function () use ($monetization, $request) {
+        // HR may approve fewer days than requested — budget shortfalls are
+        // common — but never more. Omitting the field approves in full.
+        $validated = $request->validate([
+            'approved_days' => 'nullable|numeric|min:0.5|max:' . $monetization->days_monetized,
+        ]);
+
+        $approvedDays = (float) ($validated['approved_days'] ?? $monetization->days_monetized);
+
+        $result = DB::transaction(function () use ($monetization, $request, $approvedDays) {
 
             $year = \Carbon\Carbon::parse($monetization->applied_at)->year;
 
@@ -235,23 +246,35 @@ class LeaveMonetizationController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            $balanceAfter = ($credit->remaining_balance ?? 0) - $monetization->days_monetized;
-            if (!$credit || $balanceAfter < self::MIN_RETAINED_BALANCE) {
+            if (!$credit) {
+                return ['error' => 'No leave credits found for this employee and year.'];
+            }
+
+            // Checked against the approved figure, not the requested one —
+            // otherwise a fundable partial would be refused on the strength
+            // of an amount nobody is actually deducting.
+            $balanceAfter = $credit->remaining_balance - $approvedDays;
+            if ($balanceAfter < self::MIN_RETAINED_BALANCE) {
                 return ['error' => 'Insufficient balance to approve this monetization request.'];
             }
 
-            $credit->deductLeave((float) $monetization->days_monetized);
+            $credit->deductLeave($approvedDays);
 
             $monetization->update([
-                'status'      => 'approved',
-                'reviewed_by' => $request->user()->id,
-                'reviewed_at' => now(),
+                'status'        => 'approved',
+                'approved_days' => $approvedDays,
+                'reviewed_by'   => $request->user()->id,
+                'reviewed_at'   => now(),
             ]);
+
+            $note = $approvedDays < $monetization->days_monetized
+                ? " (partial — {$monetization->days_monetized} day(s) requested)"
+                : '';
 
             ActivityLog::create([
                 'user_id'      => $request->user()->id,
                 'action'       => 'leave_monetization.approved',
-                'description'  => "Approved monetization of {$monetization->days_monetized} day(s) for employee #{$monetization->employee_id}",
+                'description'  => "Approved monetization of {$approvedDays} day(s) for employee #{$monetization->employee_id}{$note}",
                 'subject_type' => 'LeaveMonetization',
                 'subject_id'   => $monetization->id,
             ]);
@@ -274,10 +297,15 @@ class LeaveMonetizationController extends Controller
             return response()->json(['message' => 'Request is already ' . $monetization->status], 400);
         }
 
+        $validated = $request->validate([
+            'rejection_reason' => 'nullable|string|max:1000',
+        ]);
+
         $monetization->update([
-            'status'      => 'rejected',
-            'reviewed_by' => $request->user()->id,
-            'reviewed_at' => now(),
+            'status'           => 'rejected',
+            'rejection_reason' => $validated['rejection_reason'] ?? null,
+            'reviewed_by'      => $request->user()->id,
+            'reviewed_at'      => now(),
         ]);
 
         ActivityLog::create([
