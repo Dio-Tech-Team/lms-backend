@@ -635,9 +635,19 @@ class LeaveApplicationController extends Controller
         }
         // -------------------------------------------
 
+        // Days without pay live on the LeaveRecord created at approval,
+        // not on the application itself.
+        $leaveRecord = LeaveRecord::where('employee_id', $application->employee_id)
+            ->where('leave_configuration_id', $application->leave_configuration_id)
+            ->where('start_date', $application->start_date)
+            ->where('end_date', $application->end_date)
+            ->latest('id')
+            ->first();
+
         $data = [
             'application' => $application,
             'code'        => $code,
+            'no_pay_days' => $leaveRecord->no_pay_days ?? 0,
 
             'vl_total'    => number_format($vlCredit->total_credits ?? 0, 3, '.', ''),
             'vl_balance'  => number_format($vlBalance, 3, '.', ''),

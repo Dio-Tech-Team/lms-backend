@@ -128,6 +128,20 @@
 
 <body>
 
+    @php
+        // Forced Leave has no credit of its own — its days are drawn from Vacation Leave,
+        // so the deduction is certified in the Vacation Leave column of 7.A.
+        $deductsFromVl = in_array($code, ['VL', 'FL'], true);
+        $deductsFromSl = $code === 'SL';
+
+        // Codes that have their own printed checkbox on this form.
+        $listedCodes = ['VL', 'FL', 'SL', 'ML', 'PTL', 'SPL', 'SOL', 'STL', 'VAWC', 'RHL', 'SLB', 'CAL', 'ADL'];
+
+        // Days without pay are only known once the application has been acted on.
+        $noPay = (float) ($no_pay_days ?? 0);
+        $withPay = max(0, (float) $application->days_applied - $noPay);
+    @endphp
+
     <!-- ============ FRONT PAGE ============ -->
 
     <div class="header-text">
@@ -202,7 +216,7 @@
                 <span class="checkbox {{ $code === 'SPL' ? 'checked' : '' }}">{{ $code === 'SPL' ? 'X' : '' }}</span>
                 Special Privilege Leave <span class="small-text">(Sec. 21, Rule XVI, Omnibus Rules)</span><br><br>
 
-                <span class="checkbox {{ $code === 'SOLO' ? 'checked' : '' }}">{{ $code === 'SOLO' ? 'X' : '' }}</span>
+                <span class="checkbox {{ $code === 'SOL' ? 'checked' : '' }}">{{ $code === 'SOL' ? 'X' : '' }}</span>
                 Solo Parent Leave <span class="small-text">(RA No. 8972)</span><br><br>
 
                 <span class="checkbox {{ $code === 'STL' ? 'checked' : '' }}">{{ $code === 'STL' ? 'X' : '' }}</span>
@@ -211,8 +225,7 @@
                 <span class="checkbox {{ $code === 'VAWC' ? 'checked' : '' }}">{{ $code === 'VAWC' ? 'X' : '' }}</span>
                 10-Day VAWC Leave <span class="small-text">(RA No. 9262)</span><br><br>
 
-                <span
-                    class="checkbox {{ $code === 'REHAB' ? 'checked' : '' }}">{{ $code === 'REHAB' ? 'X' : '' }}</span>
+                <span class="checkbox {{ $code === 'RHL' ? 'checked' : '' }}">{{ $code === 'RHL' ? 'X' : '' }}</span>
                 Rehabilitation Privilege <span class="small-text">(Sec. 55, Rule XVI, Omnibus Rules)</span><br><br>
 
                 <span class="checkbox {{ $code === 'SLB' ? 'checked' : '' }}">{{ $code === 'SLB' ? 'X' : '' }}</span>
@@ -221,11 +234,11 @@
                 <span class="checkbox {{ $code === 'CAL' ? 'checked' : '' }}">{{ $code === 'CAL' ? 'X' : '' }}</span>
                 Special Emergency (Calamity) Leave <span class="small-text">(CSC MC No. 2, s. 2012)</span><br><br>
 
-                <span class="checkbox {{ $code === 'ADOP' ? 'checked' : '' }}">{{ $code === 'ADOP' ? 'X' : '' }}</span>
+                <span class="checkbox {{ $code === 'ADL' ? 'checked' : '' }}">{{ $code === 'ADL' ? 'X' : '' }}</span>
                 Adoption Leave <span class="small-text">(R.A. No. 8552)</span><br><br>
 
                 <strong>Others:</strong>
-                {{ !in_array($code, ['VL', 'FL', 'SL', 'ML', 'PTL', 'SPL', 'SOLO', 'STL', 'VAWC', 'REHAB', 'SLB', 'CAL', 'ADOP']) ? $application->leaveConfiguration->name : '_______________________' }}
+                {{ !in_array($code, $listedCodes, true) ? $application->leaveConfiguration->name : '_______________________' }}
             </td>
             <td style="width:50%;">
                 <strong>6.B DETAILS OF LEAVE</strong><br><br>
@@ -286,8 +299,8 @@
                     </tr>
                     <tr>
                         <td style="border:1px solid #000;">Less this application</td>
-                        <td style="border:1px solid #000;">{{ $code === 'VL' ? $application->days_applied : '' }}</td>
-                        <td style="border:1px solid #000;">{{ $code === 'SL' ? $application->days_applied : '' }}</td>
+                        <td style="border:1px solid #000;">{{ $deductsFromVl ? $application->days_applied : '' }}</td>
+                        <td style="border:1px solid #000;">{{ $deductsFromSl ? $application->days_applied : '' }}</td>
                     </tr>
                     <tr>
                         <td style="border:1px solid #000;">Balance</td>
@@ -310,7 +323,9 @@
                 For approval<br>
                 <span
                     class="checkbox {{ $application->status === 'rejected' ? 'checked' : '' }}">{{ $application->status === 'rejected' ? 'X' : '' }}</span>
-                For disapproval due to _________________________________________________ <br>
+                For disapproval due to
+                {{ $application->status === 'rejected' && $application->rejection_reason ? $application->rejection_reason : '_________________________________________________' }}
+                <br>
                 _________________________________________________<br>
                 _________________________________________________<br><br><br>
                 <div class="center underline">&nbsp;</div>
@@ -320,15 +335,21 @@
         <tr>
             <td>
                 <strong>7.C APPROVED FOR</strong><br><br>
-                {{ $application->status === 'approved' ? $application->days_applied : '_______' }} days with pay<br>
-                _______ days without pay<br>
+                {{ $application->status === 'approved' ? rtrim(rtrim(number_format($withPay, 3, '.', ''), '0'), '.') : '_______' }}
+                days with pay<br>
+                {{ $application->status === 'approved' ? rtrim(rtrim(number_format($noPay, 3, '.', ''), '0'), '.') : '_______' }}
+                days without pay<br>
                 _______ others (Specify)
             </td>
             <td>
                 <strong>7.D DISAPPROVED DUE TO:</strong><br><br>
-                &nbsp;&nbsp;__________________________________________<br>
-                &nbsp;&nbsp;__________________________________________<br>
-                &nbsp;&nbsp;__________________________________________
+                @if ($application->status === 'rejected' && $application->rejection_reason)
+                    &nbsp;&nbsp;{{ $application->rejection_reason }}
+                @else
+                    &nbsp;&nbsp;__________________________________________<br>
+                    &nbsp;&nbsp;__________________________________________<br>
+                    &nbsp;&nbsp;__________________________________________
+                @endif
             </td>
         </tr>
         <tr>
