@@ -13,8 +13,11 @@ use Carbon\Carbon;
 
 class LeaveCreditController extends Controller
 {
-    public function index($employeeId)
+    public function index(Request $request, $employeeId)
     {
+
+        $year = (int) $request->input('year', now()->year);
+
         // OPTIMIZED: INNER JOIN instead of two separate queries
         // Fixed: last_name → surname bug
         $employee = Employee::select(['id', 'first_name', 'surname'])
@@ -32,7 +35,9 @@ class LeaveCreditController extends Controller
         ])
             ->join('leave_configurations', 'leave_credits.leave_configuration_id', '=', 'leave_configurations.id')
             ->where('leave_credits.employee_id', $employeeId)
-            ->where('leave_credits.year', now()->year) // uses year index!
+            // ->where('leave_credits.year', now()->year) // uses year index!
+            // ->where('leave_credits.year', $request->input('year', now()->year))
+            ->where('leave_credits.year', $year) // uses year index!
             ->get();
 
         // Attach FL usage-this-year, since FL's own credit row is just a 0/0/0 placeholder
@@ -42,7 +47,8 @@ class LeaveCreditController extends Controller
             $flDaysTaken = $flConfig
                 ? LeaveRecord::where('employee_id', $employeeId)
                 ->where('leave_configuration_id', $flConfig->id)
-                ->whereYear('start_date', now()->year)
+                // ->whereYear('start_date', now()->year)
+                ->whereYear('start_date', $year)
                 ->sum('days_taken')
                 : 0;
 
@@ -52,7 +58,8 @@ class LeaveCreditController extends Controller
 
         return response()->json([
             'employee' => $employee->first_name . ' ' . $employee->surname,
-            'year'     => now()->year,
+            // 'year'     => now()->year,
+            'year'     => $year,
             'credits'  => $credits,
         ]);
     }
