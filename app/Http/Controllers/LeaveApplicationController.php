@@ -50,10 +50,25 @@ class LeaveApplicationController extends Controller
             ->join('departments', 'employees.department_id', '=', 'departments.id')
             ->join('leave_configurations', 'leave_applications.leave_configuration_id', '=', 'leave_configurations.id')
             ->leftJoin('users', 'leave_applications.reviewed_by', '=', 'users.id') // LEFT JOIN since reviewer may be null
+            // ->leftJoin('leave_credits', function ($join) {
+            //     $join->on('leave_credits.employee_id', '=', 'leave_applications.employee_id')
+            //         ->on('leave_credits.leave_configuration_id', '=', 'leave_applications.leave_configuration_id')
+            //         ->whereRaw('leave_credits.year = YEAR(leave_applications.applied_at)');
+            // })
+            // Forced Leave has no credit of its own — its days come out of Vacation
+            // Leave, so resolve FL to VL before joining the credit row. Without this
+            // an FL application reports the 0/0/0 FL placeholder as the balance.
+            ->leftJoin('leave_configurations as target_config', function ($join) {
+                $join->on(
+                    'target_config.code',
+                    '=',
+                    DB::raw("CASE WHEN leave_configurations.code = 'FL' THEN 'VL' ELSE leave_configurations.code END")
+                );
+            })
             ->leftJoin('leave_credits', function ($join) {
                 $join->on('leave_credits.employee_id', '=', 'leave_applications.employee_id')
-                    ->on('leave_credits.leave_configuration_id', '=', 'leave_applications.leave_configuration_id')
-                    ->whereRaw('leave_credits.year = YEAR(leave_applications.applied_at)');
+                    ->on('leave_credits.leave_configuration_id', '=', 'target_config.id')
+                    ->whereRaw('leave_credits.year = YEAR(leave_applications.start_date)');
             })
             // RESTRICT REGULAR EMPLOYEES TO THEIR OWN APPLICATIONS
             ->when(!$this->isAdmin($user), function ($query) use ($user) {
