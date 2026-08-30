@@ -265,7 +265,8 @@
         <tr>
             <td>
                 <strong>6.C NUMBER OF WORKING DAYS APPLIED FOR</strong><br><br>
-                {{ $application->days_applied }} days<br><br>
+                {{-- {{ $application->days_applied }} days<br><br> --}}
+                {{ rtrim(rtrim(number_format((float) $application->days_applied, 3, '.', ''), '0'), '.') }} days<br><br>
                 <strong>INCLUSIVE DATES</strong><br>
                 {{ $application->start_date->format('M d, Y') }} - {{ $application->end_date->format('M d, Y') }}
             </td>
@@ -299,8 +300,16 @@
                     </tr>
                     <tr>
                         <td style="border:1px solid #000;">Less this application</td>
-                        <td style="border:1px solid #000;">{{ $deductsFromVl ? $application->days_applied : '' }}</td>
+                        {{-- <td style="border:1px solid #000;">{{ $deductsFromVl ? $application->days_applied : '' }}
+                        </td>
                         <td style="border:1px solid #000;">{{ $deductsFromSl ? $application->days_applied : '' }}</td>
+                        --}}
+                        <td style="border:1px solid #000;">
+                            {{ $deductsFromVl ? rtrim(rtrim(number_format((float) $application->days_applied, 3, '.', ''), '0'), '.') : '' }}
+                        </td>
+                        <td style="border:1px solid #000;">
+                            {{ $deductsFromSl ? rtrim(rtrim(number_format((float) $application->days_applied, 3, '.', ''), '0'), '.') : '' }}
+                        </td>
                     </tr>
                     <tr>
                         <td style="border:1px solid #000;">Balance</td>
