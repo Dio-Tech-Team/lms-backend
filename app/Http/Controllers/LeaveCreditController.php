@@ -484,6 +484,8 @@ class LeaveCreditController extends Controller
                 'leave_configurations.name',
                 'leave_configurations.code',
                 'leave_configurations.grant_type',
+                'leave_credits.total_credits',
+                'leave_credits.used_credits',
                 'leave_credits.remaining_balance'
             )
             ->get();
@@ -499,6 +501,8 @@ class LeaveCreditController extends Controller
                 ->whereYear('start_date', now()->year)
                 ->sum('days_taken');
 
+            $flRow->total_credits     = 5;
+            $flRow->used_credits      = $flDaysTaken;
             $flRow->remaining_balance = max(0, 5 - $flDaysTaken);
         }
 
