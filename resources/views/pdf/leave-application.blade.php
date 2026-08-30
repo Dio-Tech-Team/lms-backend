@@ -323,7 +323,7 @@
                     <strong>FE A. BARTOLOME</strong>
                 </div>
                 <div class="center underline">&nbsp;</div>
-                <strong> HR Officer</strong>
+                <div class="center small-text">HR Officer</div>
             </td>
             <td style="width:50%;">
                 <strong>7.B RECOMMENDATION</strong><br><br>
