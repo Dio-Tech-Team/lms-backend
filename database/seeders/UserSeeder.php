@@ -21,7 +21,7 @@ class UserSeeder extends Seeder
         //     'role' => 'hr_admin'
         // ]);
         User::updateOrCreate(
-            ['username' => 'superadmin'],
+            ['username' => 'leavesyncadmin'],
             [
                 'email'    => 'leavesyncadmin@example.com',
                 'password' => Hash::make('@Password123'),

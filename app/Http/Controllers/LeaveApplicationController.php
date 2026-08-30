@@ -211,7 +211,7 @@ class LeaveApplicationController extends Controller
         }
 
         // 1. Validation Logic
-        if (in_array($config->code, ['WL', 'SPL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'])) {
+        if (in_array($config->code, ['WL', 'SPL', 'SOL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'])) {
             if ($hasInsufficientBalance) {
                 return response()->json([
                     'message' => 'Insufficient balance for ' . $config->name . '. You cannot file this leave.'
@@ -340,17 +340,17 @@ class LeaveApplicationController extends Controller
                 : $this->calculateWorkingDays($application->start_date, $application->end_date);
 
             // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
-            if (in_array($config->code, ['WL', 'SPL', 'FL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'])) {
+            if (in_array($config->code, ['WL', 'SPL', 'SOL', 'FL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'])) {
                 // if (!$credit || $credit->remaining_balance < $application->days_applied) {
                 if (!$credit || $credit->remaining_balance < $correctDays) {
                     return ['error' => 'Insufficient balance for ' . $config->name];
                 }
             }
-
             $application->update([
-                'status'      => 'approved',
-                'reviewed_by' => $request->user()->id,
-                'reviewed_at' => now(),
+                'status'       => 'approved',
+                'days_applied' => $correctDays,
+                'reviewed_by'  => $request->user()->id,
+                'reviewed_at'  => now(),
             ]);
 
             // $noPayDays = $credit ? $credit->deductLeave((float) $application->days_applied) : (float) $application->days_applied;
@@ -502,6 +502,7 @@ class LeaveApplicationController extends Controller
         return response()->json($application);
     }
 
+
     // private function calculateWorkingDays(string $startDate, string $endDate): float
     // {
     //     $start = Carbon::parse($startDate);
@@ -512,14 +513,22 @@ class LeaveApplicationController extends Controller
     //         ->map(fn($d) => $d->toDateString())
     //         ->toArray();
 
+    //     // Only Monday–Thursday are working days for this agency
+    //     $workingDaysOfWeek = [
+    //         Carbon::MONDAY,
+    //         Carbon::TUESDAY,
+    //         Carbon::WEDNESDAY,
+    //         Carbon::THURSDAY,
+    //     ];
+
     //     $count = 0;
     //     $current = $start->copy();
 
     //     while ($current->lte($end)) {
-    //         $isWeekend = $current->isWeekend();
+    //         $isWorkingDayOfWeek = in_array($current->dayOfWeek, $workingDaysOfWeek);
     //         $isHoliday = in_array($current->toDateString(), $holidayDates);
 
-    //         if (!$isWeekend && !$isHoliday) {
+    //         if ($isWorkingDayOfWeek && !$isHoliday) {
     //             $count++;
     //         }
 
@@ -528,15 +537,24 @@ class LeaveApplicationController extends Controller
 
     //     return $count;
     // }
-
     private function calculateWorkingDays(string $startDate, string $endDate): float
     {
         $start = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
 
-        $holidayDates = Holiday::whereBetween('date', [$start->toDateString(), $end->toDateString()])
+        // One-time holidays match on the full date. Recurring ones match on
+        // month and day only — otherwise a holiday entered for 2026 would
+        // stop applying in 2027 and HR would have to re-enter the whole
+        // list every January.
+        $fixedDates = Holiday::where('is_recurring', false)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->pluck('date')
-            ->map(fn($d) => $d->toDateString())
+            ->map(fn($d) => Carbon::parse($d)->toDateString())
+            ->toArray();
+
+        $recurringMonthDays = Holiday::where('is_recurring', true)
+            ->pluck('date')
+            ->map(fn($d) => Carbon::parse($d)->format('m-d'))
             ->toArray();
 
         // Only Monday–Thursday are working days for this agency
@@ -552,7 +570,8 @@ class LeaveApplicationController extends Controller
 
         while ($current->lte($end)) {
             $isWorkingDayOfWeek = in_array($current->dayOfWeek, $workingDaysOfWeek);
-            $isHoliday = in_array($current->toDateString(), $holidayDates);
+            $isHoliday = in_array($current->toDateString(), $fixedDates)
+                || in_array($current->format('m-d'), $recurringMonthDays);
 
             if ($isWorkingDayOfWeek && !$isHoliday) {
                 $count++;

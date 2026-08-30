@@ -21,6 +21,12 @@ class HolidaySeeder extends Seeder
             ['date' => '2026-11-30', 'name' => 'Bonifacio Day', 'is_recurring' => true],
             ['date' => '2026-12-25', 'name' => 'Christmas Day', 'is_recurring' => true],
             ['date' => '2026-12-30', 'name' => 'Rizal Day', 'is_recurring' => true],
+            // 2027 — movable dates. Official proclamation not yet released;
+            // verify against Malacañang before the year begins.
+            ['date' => '2027-03-25', 'name' => 'Maundy Thursday', 'is_recurring' => false],
+            ['date' => '2027-03-26', 'name' => 'Good Friday', 'is_recurring' => false],
+            ['date' => '2027-08-30', 'name' => 'National Heroes Day', 'is_recurring' => false],
+
         ];
 
         foreach ($holidays as $holiday) {

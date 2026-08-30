@@ -102,6 +102,7 @@ class LeaveConfigurationSeeder extends Seeder
                 'fixed_days'     => 7,
                 'monthly_credit' => null,
                 'credit_type'    => 'fixed',
+                'grant_type'     => 'event_manual',
                 'description'    => 'Must be filed at least 1 week in advance with updated Solo Parent Identification Card',
             ],
             [
