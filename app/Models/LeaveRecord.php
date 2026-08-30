@@ -11,6 +11,7 @@ class LeaveRecord extends Model
     protected $fillable = [
         'employee_id',
         'leave_configuration_id',
+        'attendance_id',
         'recorded_by',
         'start_date',
         'end_date',

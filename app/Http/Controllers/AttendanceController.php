@@ -25,6 +25,37 @@ class AttendanceController extends Controller
     {
         $this->computationService = $computationService;
     }
+    public function index(Request $request)
+    {
+        $query = \App\Models\Attendance::with('employee:id,first_name,middle_name,surname,department_id', 'employee.department:id,name');
+
+        if ($request->filled('month')) {
+            $monthName = \Carbon\Carbon::create(null, $request->month, 1)->format('F');
+            $query->where('month', $monthName);
+        }
+
+        if ($request->filled('year')) {
+            $query->where('year', $request->year);
+        }
+
+        if ($request->filled('department_id')) {
+            $query->whereHas('employee', function ($q) use ($request) {
+                $q->where('department_id', $request->department_id);
+            });
+        }
+
+        if ($request->filled('search')) {
+            $query->whereHas('employee', function ($q) use ($request) {
+                $q->where('first_name', 'LIKE', '%' . $request->search . '%')
+                    ->orWhere('surname', 'LIKE', '%' . $request->search . '%');
+            });
+        }
+
+        $summaries = $query->orderBy('created_at', 'desc')->get();
+
+        return response()->json($summaries);
+    }
+
     public function upload(Request $request)
     {
         $request->validate([
@@ -37,6 +68,13 @@ class AttendanceController extends Controller
         $file = $request->file('file');
         $month = $request->month;
         $year = $request->year;
+
+        $selected = Carbon::create($year, $month, 1)->startOfMonth();
+        if ($selected->isFuture()) {
+            return response()->json([
+                'message' => "You selected {$selected->format('F Y')}, which hasn't started yet. Check the month and year.",
+            ], 422);
+        }
 
         $spreadsheet = IOFactory::load($file->getPathname());
 
@@ -53,6 +91,10 @@ class AttendanceController extends Controller
                 foreach ($sheets as $sheet) {
                     $sheetName = $sheet->getTitle(); // e.g. "Assessor's Office", "MASO", etc.
                     $rows = $sheet->toArray();
+                    $sheetMonth = strtoupper(trim($rows[0][0] ?? ''));
+                    if ($sheetMonth && $sheetMonth !== strtoupper($monthName)) {
+                        throw new \Exception("The {$sheetName} tab is labelled {$sheetMonth} but you selected {$monthName}. Check the month selection or the file.");
+                    }
 
                     foreach ($rows as $index => $row) {
                         if ($index < 2) continue; // skip header
@@ -268,29 +310,6 @@ class AttendanceController extends Controller
         $dates = array_filter(array_map('trim', explode(',', $dateString)));
         return count($dates);
     }
-    public function index(Request $request)
-    {
-        $query = \App\Models\Attendance::with('employee:id,first_name,middle_name,surname,department_id', 'employee.department:id,name');
-
-        if ($request->filled('month')) {
-            $monthName = \Carbon\Carbon::create(null, $request->month, 1)->format('F');
-            $query->where('month', $monthName);
-        }
-
-        if ($request->filled('year')) {
-            $query->where('year', $request->year);
-        }
-
-        if ($request->filled('department_id')) {
-            $query->whereHas('employee', function ($q) use ($request) {
-                $q->where('department_id', $request->department_id);
-            });
-        }
-
-        $summaries = $query->orderBy('created_at', 'desc')->get();
-
-        return response()->json($summaries);
-    }
     private function parseMinutes($value): int
 
     {
@@ -333,6 +352,7 @@ class AttendanceController extends Controller
                     LeaveRecord::create([
                         'employee_id'            => $employee->id,
                         'leave_configuration_id' => $vlConfig->id,
+                        'attendance_id'          => $attendance->id,
                         'recorded_by'            => $uploadedBy,
                         'start_date'             => $periodStart,
                         'end_date'               => $periodEnd,
@@ -361,5 +381,66 @@ class AttendanceController extends Controller
             $slCredit->last_updated = now();
             $slCredit->save();
         }
+    }
+    public function destroy(Request $request, $id)
+    {
+        $attendance = Attendance::findOrFail($id);
+
+        $employee = Employee::find($attendance->employee_id);
+        $monthLabel = "{$attendance->month} {$attendance->year}";
+
+        DB::transaction(function () use ($attendance) {
+            $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
+            $slConfig = LeaveConfiguration::where('code', 'SL')->first();
+
+            if ($vlConfig) {
+                $vlCredit = LeaveCredit::where('employee_id', $attendance->employee_id)
+                    ->where('leave_configuration_id', $vlConfig->id)
+                    ->where('year', $attendance->year)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($vlCredit) {
+                    // Only the portion the balance actually absorbed was added to
+                    // used_credits — the rest became LWOP and never touched it.
+                    $absorbed = (float) $attendance->tardiness_equivalent_days
+                        - (float) ($attendance->lwop_days ?? 0);
+
+                    $vlCredit->total_credits = max(0, (float) $vlCredit->total_credits - (float) $attendance->vl_earned);
+                    $vlCredit->used_credits  = max(0, (float) $vlCredit->used_credits - $absorbed);
+                    $vlCredit->last_updated  = now();
+                    $vlCredit->save(); // saving hook recomputes remaining_balance
+                }
+            }
+
+            if ($slConfig) {
+                $slCredit = LeaveCredit::where('employee_id', $attendance->employee_id)
+                    ->where('leave_configuration_id', $slConfig->id)
+                    ->where('year', $attendance->year)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($slCredit) {
+                    $slCredit->total_credits = max(0, (float) $slCredit->total_credits - (float) $attendance->sl_earned);
+                    $slCredit->last_updated  = now();
+                    $slCredit->save();
+                }
+            }
+
+            // The tardiness LWOP record is removed by the attendance_id
+            // foreign key's cascade — real leave applications are untouched
+            // because their attendance_id is null.
+            $attendance->delete();
+        });
+
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'attendance.reversed',
+            'description'  => "Reversed attendance for {$employee?->first_name} {$employee?->surname} — {$monthLabel}. Credits and tardiness deductions restored.",
+            'subject_type' => 'Attendance',
+            'subject_id'   => null,
+        ]);
+
+        return response()->json(['message' => 'Attendance record reversed successfully']);
     }
 }

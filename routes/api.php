@@ -94,6 +94,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         // Attendance Admin
         Route::post('attendance/upload', [AttendanceController::class, 'upload']);
         Route::get('attendance/missing-check', [AttendanceController::class, 'checkMissingAttendance']);
+        Route::delete('attendance/{id}', [AttendanceController::class, 'destroy']);
 
         // --- Promotion History ---
         Route::prefix('employees/{employeeId}/promotions')->group(function () {
