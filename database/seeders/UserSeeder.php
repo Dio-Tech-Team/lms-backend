@@ -72,7 +72,7 @@ class UserSeeder extends Seeder
             ['Rolando', 'Gonzales'],
             ['Arnel', 'Mercado'],
 
-            ['Joel', 'Pastor'],
+            ['Jen', 'Tuquib'],
             ['Jhon', 'Reyes'],
             ['Jayson', 'Espiritu'],
             ['Joy', 'Dizon'],
