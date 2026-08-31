@@ -634,22 +634,44 @@ class LeaveApplicationController extends Controller
         $slCredit  = $credits->get($slId);
 
         // --- PROJECTED BALANCES FOR THE PDF ONLY {{NEW}} ---
-        $vlBalance = $vlCredit?->remaining_balance ?? 0;
-        $slBalance = $slCredit?->remaining_balance ?? 0;
+        // $vlBalance = $vlCredit?->remaining_balance ?? 0;
+        // $slBalance = $slCredit?->remaining_balance ?? 0;
 
 
-        // If the application is still pending, preview the deduction on the form based on type {{NEW}}
-        if ($application->status === 'pending') {
-            $days = (float) $application->days_applied;
+        // // If the application is still pending, preview the deduction on the form based on type {{NEW}}
+        // $vlTotal = $vlCredit?->remaining_balance ?? 0;
+        // $slTotal = $slCredit?->remaining_balance ?? 0;
 
-            if ($code === 'VL' || $code === 'FL') {
-                $vlBalance = max(0, $vlBalance - $days);
-            } elseif ($code === 'SL') {
-                $slBalance = max(0, $slBalance - $days);
-            }
-        }
-        // -------------------------------------------
+        // if ($application->status === 'approved') {
+        //     // deductLeave() already ran — add the days back to show the before figure
+        //     $days = (float) $application->days_applied;
+        //     if ($code === 'VL' || $code === 'FL') {
+        //         $vlTotal += $days;
+        //     } elseif ($code === 'SL') {
+        //         $slTotal += $days;
+        //     }
+        // }
+        // // -------------------------------------------
 
+        // // Days without pay live on the LeaveRecord created at approval,
+        // // not on the application itself.
+        // $leaveRecord = LeaveRecord::where('employee_id', $application->employee_id)
+        //     ->where('leave_configuration_id', $application->leave_configuration_id)
+        //     ->where('start_date', $application->start_date)
+        //     ->where('end_date', $application->end_date)
+        //     ->latest('id')
+        //     ->first();
+
+        // $data = [
+        //     'application' => $application,
+        //     'code'        => $code,
+        //     'no_pay_days' => $leaveRecord->no_pay_days ?? 0,
+
+        //     'vl_total'    => number_format($vlCredit->total_credits ?? 0, 3, '.', ''),
+        //     'vl_balance'  => number_format($vlBalance, 3, '.', ''),
+        //     'sl_total'    => number_format($slCredit->total_credits ?? 0, 3, '.', ''),
+        //     'sl_balance'  => number_format($slBalance, 3, '.', ''),
+        // ];
         // Days without pay live on the LeaveRecord created at approval,
         // not on the application itself.
         $leaveRecord = LeaveRecord::where('employee_id', $application->employee_id)
@@ -659,14 +681,42 @@ class LeaveApplicationController extends Controller
             ->latest('id')
             ->first();
 
+        // 7.A certifies available credits, not lifetime accrual — so the
+        // "Total Earned" row is the balance BEFORE this application, and
+        // "Balance" is what remains after it.
+        $vlBalance = $vlCredit?->remaining_balance ?? 0;
+        $slBalance = $slCredit?->remaining_balance ?? 0;
+        $vlTotal   = $vlBalance;
+        $slTotal   = $slBalance;
+
+        $days = (float) $application->days_applied;
+
+        if ($application->status === 'pending') {
+            // Not deducted yet — project the deduction onto the balance row.
+            if ($code === 'VL' || $code === 'FL') {
+                $vlBalance = max(0, $vlBalance - $days);
+            } elseif ($code === 'SL') {
+                $slBalance = max(0, $slBalance - $days);
+            }
+        } elseif ($application->status === 'approved') {
+            // Already deducted — add back only what the balance actually
+            // absorbed, since LWOP days never touched it.
+            $absorbed = $days - (float) ($leaveRecord->no_pay_days ?? 0);
+            if ($code === 'VL' || $code === 'FL') {
+                $vlTotal += $absorbed;
+            } elseif ($code === 'SL') {
+                $slTotal += $absorbed;
+            }
+        }
+
         $data = [
             'application' => $application,
             'code'        => $code,
             'no_pay_days' => $leaveRecord->no_pay_days ?? 0,
 
-            'vl_total'    => number_format($vlCredit->total_credits ?? 0, 3, '.', ''),
+            'vl_total'    => number_format($vlTotal, 3, '.', ''),
             'vl_balance'  => number_format($vlBalance, 3, '.', ''),
-            'sl_total'    => number_format($slCredit->total_credits ?? 0, 3, '.', ''),
+            'sl_total'    => number_format($slTotal, 3, '.', ''),
             'sl_balance'  => number_format($slBalance, 3, '.', ''),
         ];
 
