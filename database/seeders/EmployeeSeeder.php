@@ -782,13 +782,13 @@ class EmployeeSeeder extends Seeder
                 'date_hired' => '2015-02-09',
             ],
 
-            // 26. Joel Pastor
+            // 26. Jen Tuquib
             [
-                'username' => 'joelpastor',
+                'username' => 'jentuquib',
                 'department' => 'MHRMO',
-                'first_name' => 'Joel',
+                'first_name' => 'Jen',
                 'middle_name' => 'P',
-                'surname' => 'Pastor',
+                'surname' => 'Tuquib',
                 'id_number' => 'LGU-MHRMO-001',
                 'birthdate' => '1995-01-05',
                 'place_of_birth' => 'Echague, Isabela',
@@ -805,8 +805,8 @@ class EmployeeSeeder extends Seeder
                 'philhealth_number' => '12-345678901-2',
                 'psn_number' => '1234-5678-9012',
                 'tin_number' => '123-456-789',
-                'employment_status' => 'job_order',
-                'position' => 'Encoder',
+                'employment_status' => 'permanent',
+                'position' => 'Admin Aide I',
                 'date_hired' => '2013-09-13',
             ],
 
