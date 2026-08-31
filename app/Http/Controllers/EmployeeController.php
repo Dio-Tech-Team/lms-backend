@@ -129,7 +129,7 @@ class EmployeeController extends Controller
             'middle_name'                      => 'nullable|string',
             'surname'                          => 'required|string',
             'id_number'                        => 'required|string|unique:employees,id_number',
-            'birthdate'                        => 'nullable|date',
+            'birthdate'                         => 'nullable|date|before:today',
             'place_of_birth'                   => 'nullable|string',
             'sex'                              => 'required|in:male,female',
             'civil_status'                     => 'required|in:single,married,widowed,separated',
@@ -148,7 +148,7 @@ class EmployeeController extends Controller
             // 'position'                         => 'required|string',
             'position' => 'required|string|exists:positions,title',
             'department_id'                    => 'required|exists:departments,id',
-            'date_hired'                       => 'required|date',
+            'date_hired' => 'required|date|before_or_equal:today',
         ]);
 
         // Authorization check before DB transaction
@@ -361,7 +361,7 @@ class EmployeeController extends Controller
             'first_name'                       => 'sometimes|string',
             'middle_name'                      => 'nullable|string',
             'surname'                          => 'sometimes|string',
-            'birthdate'                        => 'nullable|date',
+            'birthdate'                         => 'nullable|date|before:today',
             'place_of_birth'                   => 'nullable|string',
             'sex'                              => 'sometimes|in:male,female',
             'civil_status'                     => 'sometimes|in:single,married,widowed,separated',
@@ -378,7 +378,7 @@ class EmployeeController extends Controller
             'tin_number'                       => 'nullable|string',
             'department_id'                    => 'sometimes|exists:departments,id',
             'position' => 'sometimes|string|exists:positions,title',
-            'date_hired'                       => 'sometimes|date',
+            'date_hired' => 'sometimes|date|before_or_equal:today',
             // 'email'                            => 'nullable|email|unique:users,email,' . $employee->user_id,
         ]);
 

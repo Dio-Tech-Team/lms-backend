@@ -14,22 +14,24 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::create([
-        //     'username' => 'hradmin',
-        //     'email' => 'hradmin@gmail.com',
-        //     'password' => Hash::make('@Password123'),
-        //     'role' => 'hr_admin'
-        // ]);
         User::updateOrCreate(
-            ['username' => 'leavesyncadmin'],
+            ['username' => 'leavesyncadmin1'],
             [
-                'email'    => 'leavesyncadmin@example.com',
+                'email'    => 'leavesyncadmin1@gmail.com',
                 'password' => Hash::make('@Password123'),
                 'role'     => 'super_admin',
                 'must_change_password' => true,
             ]
         );
-
+        User::updateOrCreate(
+            ['username' => 'leavesyncadmin2'],
+            [
+                'email'    => 'leavesyncadmin2@gmail.com',
+                'password' => Hash::make('@Password123'),
+                'role'     => 'super_admin',
+                'must_change_password' => true,
+            ]
+        );
         User::updateOrCreate(
             ['username' => 'hradmin'],
             [
