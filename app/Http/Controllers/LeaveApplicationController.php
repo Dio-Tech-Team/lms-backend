@@ -326,6 +326,57 @@ class LeaveApplicationController extends Controller
             'remaining_balance'    => $credit->remaining_balance ?? 0,
         ], 201);
     }
+
+    /**
+     * Dry-run for the apply-leave modal: how many days this date range
+     * actually costs, and what it does to the balance. No writes.
+     * Deliberately mirrors store()/approve() rather than re-deriving —
+     * a preview that disagrees with the deduction is worse than none.
+     */
+    public function preview(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id'            => 'required|exists:employees,id',
+            'leave_configuration_id' => 'required|exists:leave_configurations,id',
+            'start_date'             => 'required|date',
+            'end_date'               => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $config = LeaveConfiguration::findOrFail($validated['leave_configuration_id']);
+
+        // event_manual types count calendar days; annual_auto skip weekends + holidays
+        $days = $config->grant_type === 'event_manual'
+            ? Carbon::parse($validated['start_date'])->diffInDays(Carbon::parse($validated['end_date'])) + 1
+            : $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
+
+        $year = Carbon::parse($validated['start_date'])->year;
+
+        // Forced Leave draws from Vacation Leave, not from its own placeholder row
+        $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
+
+        $credit = LeaveCredit::where('employee_id', $validated['employee_id'])
+            ->whereHas('leaveConfiguration', fn($q) => $q->where('code', $targetCode))
+            ->where('year', $year)
+            ->first();
+
+        $balance   = $credit ? (float) $credit->remaining_balance : null;
+        $shortfall = ($balance !== null && $days > $balance) ? round($days - $balance, 3) : 0;
+
+        // Only VL/SL fall through to LWOP; the rest are hard-blocked at store()
+        $hardBlocked = in_array($config->code, ['WL', 'SPL', 'SOL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'], true);
+
+        return response()->json([
+            'days_applied'      => $days,
+            'counting'          => $config->grant_type === 'event_manual' ? 'calendar' : 'working',
+            'target_code'       => $targetCode,
+            'remaining_balance' => $balance,
+            'balance_after'     => $balance === null ? null : round(max(0, $balance - $days), 3),
+            'shortfall'         => $shortfall,
+            'will_be_lwop'      => !$hardBlocked && $shortfall > 0,
+            'hard_blocked'      => $hardBlocked && $shortfall > 0,
+            'has_credit_row'    => (bool) $credit,
+        ]);
+    }
     public function approve(Request $request, $id)
     {
         $application = LeaveApplication::findOrFail($id);
@@ -441,9 +492,9 @@ class LeaveApplicationController extends Controller
             return 'Paternity leave is only available for male employees.';
         }
 
-        if ($config->code === 'ML' && $employee->sex !== 'female') {
-            return 'Maternity leave is only available for female employees.';
-        }
+        // if ($config->code === 'ML' && $employee->sex !== 'female') {
+        //     return 'Maternity leave is only available for female employees.';
+        // }
 
         return null; // No errors
     }

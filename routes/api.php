@@ -53,6 +53,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::prefix('leave-applications')->group(function () {
         Route::get('/', [LeaveApplicationController::class, 'index']);
         Route::post('/', [LeaveApplicationController::class, 'store']);
+        Route::post('/preview', [LeaveApplicationController::class, 'preview']);
         Route::get('/{id}', [LeaveApplicationController::class, 'show']);
         Route::get('/{id}/pdf', [LeaveApplicationController::class, 'generatePdf']);
         Route::post('/{id}/cancel', [LeaveApplicationController::class, 'cancel']);

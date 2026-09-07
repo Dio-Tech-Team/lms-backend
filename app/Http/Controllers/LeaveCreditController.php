@@ -334,7 +334,7 @@ class LeaveCreditController extends Controller
         }
 
         // Sex-based eligibility — mirrors LeaveApplicationController::validateLeaveEligibility()
-        $femaleOnly = ['ML', 'VAWC', 'SLB'];
+        $femaleOnly = ['VAWC', 'SLB'];
         $maleOnly   = ['PTL'];
 
         if (in_array($config->code, $femaleOnly) && $employee->sex !== 'female') {
@@ -349,6 +349,12 @@ class LeaveCreditController extends Controller
         }
 
         $days = $validated['days'] ?? $config->fixed_days;
+
+        // if ($config->code === 'ML' && $employee->sex === 'male' && !isset($validated['days'])) {
+        //     return response()->json([
+        //         'message' => 'Please specify the number of days allocated for this employee.'
+        //     ], 422);
+        // }
 
         if ($days === null) {
             return response()->json([

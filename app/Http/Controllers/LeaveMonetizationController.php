@@ -14,7 +14,7 @@ class LeaveMonetizationController extends Controller
 {
     // CSC-style minimum balance that must remain after monetizing.
     // Adjust or remove this rule if your agency uses a different figure.
-    private const MIN_RETAINED_BALANCE = 15;
+    private const MIN_RETAINED_BALANCE = 10;
 
     private function isAdmin($user): bool
     {
