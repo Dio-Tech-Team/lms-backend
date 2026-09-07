@@ -135,7 +135,7 @@ class EmployeeController extends Controller
             'civil_status'                     => 'required|in:single,married,widowed,separated',
             'height'                           => 'nullable|string',
             'weight'                           => 'nullable|string',
-            'bloodtype'                        => 'nullable|string',
+            'bloodtype'                        => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
             'highest_educational_attainment'   => 'required|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
             'contact_number'                   => 'nullable|digits:11',
@@ -361,13 +361,14 @@ class EmployeeController extends Controller
             'first_name'                       => 'sometimes|string',
             'middle_name'                      => 'nullable|string',
             'surname'                          => 'sometimes|string',
+            'id_number'                        => 'sometimes|string|unique:employees,id_number,' . $employee->id,
             'birthdate'                         => 'nullable|date|before:today',
             'place_of_birth'                   => 'nullable|string',
             'sex'                              => 'sometimes|in:male,female',
             'civil_status'                     => 'sometimes|in:single,married,widowed,separated',
             'height'                           => 'nullable|string',
             'weight'                           => 'nullable|string',
-            'bloodtype'                        => 'nullable|string',
+            'bloodtype'                        => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
             'highest_educational_attainment'   => 'sometimes|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
             'contact_number'                   => 'nullable|digits:11',
@@ -379,6 +380,7 @@ class EmployeeController extends Controller
             'department_id'                    => 'sometimes|exists:departments,id',
             'position' => 'sometimes|string|exists:positions,title',
             'date_hired' => 'sometimes|date|before_or_equal:today',
+
             // 'email'                            => 'nullable|email|unique:users,email,' . $employee->user_id,
         ]);
 
@@ -407,6 +409,59 @@ class EmployeeController extends Controller
         return response()->json([
             'message'  => 'Employee updated successfully',
             'employee' => $employee,
+        ]);
+    }
+
+    /**
+     * Self-service profile update from mobile. Deliberately separate from
+     * update(): that one is admin-only and can write position, department
+     * and employment status. Here the employee is taken from the token, so
+     * there is no id to tamper with, and only personal fields are accepted.
+     */
+    public function updateOwnProfile(Request $request)
+    {
+        $employee = $request->user()->employee;
+
+        if (!$employee) {
+            return response()->json([
+                'message' => 'No employee record is linked to your account.'
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'birthdate'                      => 'nullable|date|before:today',
+            'place_of_birth'                 => 'nullable|string|max:255',
+            'residential_address'            => 'nullable|string|max:500',
+            'contact_number'                 => 'nullable|digits:11',
+            'sex'                            => 'nullable|in:male,female',
+            'civil_status'                   => 'nullable|in:single,married,widowed,separated',
+            'height'                         => 'nullable|numeric|min:50|max:250',
+            'weight'                         => 'nullable|numeric|min:20|max:400',
+            'bloodtype'                      => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
+            'highest_educational_attainment' => 'nullable|in:elementary,secondary,vocational,college,graduate',
+            'tin_number'                     => 'nullable|digits_between:9,12',
+            'umid_id'                        => 'nullable|digits:12',
+            'pagibig_id'                     => 'nullable|digits:12',
+            'philhealth_number'              => 'nullable|digits:12',
+            'psn_number'                     => 'nullable|digits:16',
+        ]);
+
+        // Only fields the request actually sent — a partial save must not
+        // blank out everything else on the record.
+        $employee->update($validated);
+
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'employee.self_updated',
+            'description'  => "{$employee->first_name} {$employee->surname} updated their own profile ("
+                . implode(', ', array_keys($validated)) . ')',
+            'subject_type' => 'Employee',
+            'subject_id'   => $employee->id,
+        ]);
+
+        return response()->json([
+            'message'  => 'Profile updated successfully',
+            'employee' => $employee->fresh(),
         ]);
     }
 

@@ -40,6 +40,8 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('employees', [EmployeeController::class, 'index']);
     Route::get('employees/{id}', [EmployeeController::class, 'show']);
 
+    Route::put('/profile', [EmployeeController::class, 'updateOwnProfile']);
+
     // Departments (READ) - open to everyone authenticated
     Route::get('departments', [DepartmentController::class, 'index']);
     Route::get('departments/{id}', [DepartmentController::class, 'show']);
