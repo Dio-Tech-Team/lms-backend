@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Mail;
 
 class AuthController extends Controller
 {
+    // Log in with username or email. Unverified employees get an OTP instead of a token.
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -57,6 +58,7 @@ class AuthController extends Controller
         ]);
     }
 
+    // Check the emailed OTP, mark the email verified, and issue the login token.
     public function verifyOtp(Request $request)
     {
         $request->validate([
@@ -107,6 +109,8 @@ class AuthController extends Controller
             ]
         ]);
     }
+
+    // Send a fresh OTP to an employee who hasn't verified yet.
     public function resendOtp(Request $request)
     {
         $request->validate([
@@ -127,6 +131,8 @@ class AuthController extends Controller
             'message' => 'A new verification code has been sent to your email.',
         ]);
     }
+
+    // Change the logged-in user's password and clear the must-change flag.
     public function changePassword(Request $request)
     {
         $request->validate([
@@ -149,19 +155,19 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Password changed successfully.']);
     }
+
+    // Log out by deleting the token used for this request.
     public function logout(Request $request)
     {
         $user = $request->user();
-
         $user->currentAccessToken()->delete();
-
         return response()->json([
             'message'
             => 'Logged out successfully'
-
         ]);
     }
 
+    // Return the currently logged-in user's details.
     public function me(Request $request)
     {
         $user = $request->user();
@@ -176,6 +182,7 @@ class AuthController extends Controller
         ]);
     }
 
+    // Generate a 6-digit code, save it with a 10-minute expiry, and email it.
     private function generateAndSendOtp(User $user)
     {
         $otp = random_int(100000, 999999); // 6-digit code

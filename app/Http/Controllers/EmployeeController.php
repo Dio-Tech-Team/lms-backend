@@ -69,8 +69,6 @@ class EmployeeController extends Controller
             });
         }
         // Apply pagination
-        $query->orderBy('employees.surname')
-            ->orderBy('employees.first_name');
         $employees = $query->paginate(10);
 
 
@@ -161,19 +159,11 @@ class EmployeeController extends Controller
 
             $user = User::create([
                 'username' => $request->username,
-                'email' => $request->email, // nullable now — no placeholder fallback
+                'email' => $request->email,
                 'password' => Hash::make($defaultPassword),
                 'role' => 'employee',
                 'must_change_password' => true,
             ]);
-
-            // $employee = DB::transaction(function () use ($request) {
-            //     $user = User::create([
-            //         'username' => $request->username,
-            //         'email' => $request->email,
-            //         'password' => Hash::make($request->password),
-            //         'role' => 'employee',
-            //     ]);
 
             $employee = Employee::create([
                 'user_id'                          => $user->id,
@@ -349,7 +339,6 @@ class EmployeeController extends Controller
     public function update(Request $request, string $id)
     {
 
-        // ADD THIS BLOCK — matches destroy()'s pattern
         $user = $request->user();
         if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
             return response()->json(['message' => 'Forbidden'], 403);
@@ -380,22 +369,9 @@ class EmployeeController extends Controller
             'department_id'                    => 'sometimes|exists:departments,id',
             'position' => 'sometimes|string|exists:positions,title',
             'date_hired' => 'sometimes|date|before_or_equal:today',
-
-            // 'email'                            => 'nullable|email|unique:users,email,' . $employee->user_id,
         ]);
 
-        // // Separate email out before updating Employee fields
-        // $email = $validated['email'] ?? null;
-        // unset($validated['email']);
-
-        // $employee = Employee::findOrFail($id);
         $employee->update($validated);
-
-
-        // // NEW — update email on the related User record, if provided
-        // if (array_key_exists('email', $request->all())) {
-        //     $employee->user()->update(['email' => $email]);
-        // }
 
         // NEW — log the update
         ActivityLog::create([
@@ -406,18 +382,18 @@ class EmployeeController extends Controller
             'subject_id'   => $employee->id,
         ]);
 
+        //      // Apply pagination
+        // $query->orderBy('employees.surname')
+        //     ->orderBy('employees.first_name');
+        // $employees = $query->paginate(10);
+
+
         return response()->json([
             'message'  => 'Employee updated successfully',
             'employee' => $employee,
         ]);
     }
 
-    /**
-     * Self-service profile update from mobile. Deliberately separate from
-     * update(): that one is admin-only and can write position, department
-     * and employment status. Here the employee is taken from the token, so
-     * there is no id to tamper with, and only personal fields are accepted.
-     */
     public function updateOwnProfile(Request $request)
     {
         $employee = $request->user()->employee;
@@ -630,7 +606,7 @@ class EmployeeController extends Controller
 
         $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
         $slConfig = LeaveConfiguration::where('code', 'SL')->first();
-        $flConfig = LeaveConfiguration::where('code', 'FL')->first();   // ADD THIS
+        $flConfig = LeaveConfiguration::where('code', 'FL')->first();
 
         return response()->json([
             'employee' => [
@@ -638,7 +614,7 @@ class EmployeeController extends Controller
                 'name'     => $employee->first_name . ' ' . $employee->surname,
                 'position' => $employee->position,
             ],
-            'year' => $year,   // NEW — handy for frontend to confirm/display
+            'year' => $year,
             'vacation_leave' => $this->buildLeaveCardForType(
                 $employee,
                 $vlConfig,
@@ -692,14 +668,8 @@ class EmployeeController extends Controller
                 ->first();
         }
 
-        // Attendance, leave records, monetizations built first now —
-        // opening balance / correction need these to determine sort_date
         $attendanceRows = Attendance::where('employee_id', $employee->id)->where('year', $year)                              // NEW
             ->get();
-        // foreach ($attendanceRows as $row) {
-        //     $earned = $type === 'vl'
-        //         ? $row->vl_earned - $row->tardiness_equivalent_days
-        //         : $row->sl_earned;
 
         foreach ($attendanceRows as $row) {
             $earned = $type === 'vl'
@@ -764,24 +734,9 @@ class EmployeeController extends Controller
                 ];
             }
         }
-
-        // Opening balance / correction built LAST so the entries above are
-        // already in place; the entry itself is dated to the day before the
-        // card's year, which always sorts first since everything else is
-        // scoped to $year.
         if ($config && $credit) {
-            // Anchored to the day before the card's year, not to the earliest
-            // other entry — that was computed per type, so VL (which had
-            // monetizations in 2026) and SL (which had nothing, so it fell back
-            // to date_hired in 2021) ended up with opening-balance lines five
-            // years apart for the same onboarding event. Every other entry is
-            // scoped to $year, so this always sorts first.
             $baseDate = \Carbon\Carbon::create($year, 1, 1)->subDay();
             if ((float) $credit->opening_balance > 0) {
-                // Earliest year with an actual opening balance, not merely the
-                // earliest year with a row — employees hired years before
-                // onboarding have empty 0/0/0 placeholder rows for those years,
-                // and gating on those suppressed the entry entirely.
                 $earliestCreditYear = \App\Models\LeaveCredit::where('employee_id', $employee->id)
                     ->where('leave_configuration_id', $config->id)
                     ->where('opening_balance', '>', 0)
@@ -862,7 +817,6 @@ class EmployeeController extends Controller
         $forecastRecords = [];
 
         foreach ($employees as $employee) {
-            // Find the milestone date where their step reset due to permanency or promotion
             $latestReset = $employee->employment_history->first(function ($history) {
                 return $history->new_employment_status === 'permanent'
                     || $history->new_position !== $history->previous_position;
@@ -966,8 +920,6 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'Employee is already marked as retired'], 422);
         }
 
-        // Mandatory retirement is age-gated per CSC rules; optional has no age
-        // restriction (agency confirmed employees may retire anytime)
         if ($request->retirement_type === 'mandatory') {
             if (!$employee->birthdate) {
                 return response()->json(['message' => 'Cannot process mandatory retirement — employee has no birthdate on record'], 422);
@@ -1067,9 +1019,6 @@ class EmployeeController extends Controller
     {
         // OPTIMIZED: check auth first before any DB query
         $user = request()->user();
-        // if (!$user || $user->role !== 'super_admin') {
-        //     return response()->json(['message' => 'Forbidden'], 403);
-        // }
         if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }

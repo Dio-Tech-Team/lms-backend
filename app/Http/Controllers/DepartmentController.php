@@ -8,9 +8,7 @@ use Illuminate\Http\Request;
 
 class DepartmentController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
+    // List active departments only, sorted by name.
     public function index()
     {
 
@@ -23,9 +21,7 @@ class DepartmentController extends Controller
         ], 200);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
+    // Create a department and log it. Code must be unique.
     public function store(Request $request)
     {
         $request->validate([
@@ -56,9 +52,7 @@ class DepartmentController extends Controller
         ], 201);
     }
 
-    /**
-     * Display the specified resource.
-     */
+    // Show one department by ID. 404s if not found.
     public function show(string $id)
     {
         // Vertical partitioning
@@ -72,9 +66,7 @@ class DepartmentController extends Controller
     }
 
 
-    /**
-     * Update the specified resource in storage.
-     */
+    // Update a department and log it. Only sends fields that were provided.
     public function update(Request $request, string $id)
     {
 
@@ -83,7 +75,6 @@ class DepartmentController extends Controller
             'code' => 'sometimes|required|string|max:10|unique:departments,code,' . $id,
             'is_active' => 'boolean'
         ]);
-        // Single query: find and update
         $department = Department::findOrFail($id);
         $department->update($validated);
 
@@ -102,9 +93,8 @@ class DepartmentController extends Controller
         ], 200);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
+
+    // Deactivate a department. Does not delete the row, so employee records keep their link.
     public function destroy(string $id)
     {
         $department = Department::findOrFail($id);

@@ -9,14 +9,17 @@ use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
+
+    // List all accounts, 20 per page, sorted by username.
     public function index(Request $request)
     {
         return User::select('id', 'username', 'email', 'role', 'created_at')
             ->when($request->filled('role'), fn($q) => $q->where('role', $request->role))
             ->orderBy('username')
             ->paginate(20);
-        // ->get();
     }
+
+    // Create a new account with a hashed password.
 
     public function store(Request $request)
     {
@@ -41,6 +44,8 @@ class UserController extends Controller
             'role'     => $user->role,
         ], 201);
     }
+
+    // Delete an account. Blocks deleting the currently logged-in user.
 
     public function destroy(User $user, Request $request)
     {
