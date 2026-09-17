@@ -320,10 +320,10 @@
                 <br>
 
                 <div class="center small-text">
-                    <strong>FE A. BARTOLOME</strong>
+                    <strong>{{ $signatories['hr_officer'] ?? '' }}</strong>
                 </div>
                 <div class="center underline">&nbsp;</div>
-                <div class="center small-text">HR Officer</div>
+                <div class="center small-text">{{ $positions['hr_officer'] ?? 'HR Officer' }}</div>
             </td>
             <td style="width:50%;">
                 <strong>7.B RECOMMENDATION</strong><br><br>
@@ -363,15 +363,12 @@
         </tr>
         <tr>
             <td colspan="2" class="center">
-                <strong><u>FAUSTINO A. DY, V</u></strong>
+                <strong><u>{{ $signatories['approving_authority'] ?? '' }}</u></strong>
                 <br>
-                Municipal Mayor
+                {{ $positions['approving_authority'] ?? '' }}
             </td>
         </tr>
     </table>
-
-
-
     <!-- ============ BACK PAGE — INSTRUCTIONS AND REQUIREMENTS ============ -->
 
     <div class="back-page">

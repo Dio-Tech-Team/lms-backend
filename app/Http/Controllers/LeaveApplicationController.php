@@ -13,6 +13,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
 use App\Models\ActivityLog;
 use App\Models\Holiday;
+use App\Models\Signatory;
 
 class LeaveApplicationController extends Controller
 {
@@ -760,6 +761,9 @@ class LeaveApplicationController extends Controller
             }
         }
 
+        $signatories = Signatory::pluck('name', 'role');
+        $positions   = Signatory::pluck('position', 'role');
+
         $data = [
             'application' => $application,
             'code'        => $code,
@@ -769,6 +773,9 @@ class LeaveApplicationController extends Controller
             'vl_balance'  => number_format($vlBalance, 3, '.', ''),
             'sl_total'    => number_format($slTotal, 3, '.', ''),
             'sl_balance'  => number_format($slBalance, 3, '.', ''),
+
+            'signatories' => $signatories,
+            'positions'   => $positions,
         ];
 
         $pdf = Pdf::loadView('pdf.leave-application', $data);

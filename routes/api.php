@@ -18,7 +18,8 @@ use App\Http\Controllers\{
     LeaveMonetizationController,
     HolidayController,
     PositionController,
-    ReportController
+    ReportController,
+    SignatoryController
 };
 
 Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
@@ -77,6 +78,10 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::put('employees/{id}', [EmployeeController::class, 'update']);
         Route::patch('employees/{id}', [EmployeeController::class, 'update']);
         Route::delete('employees/{id}', [EmployeeController::class, 'destroy']);
+
+        Route::put('personnel/{id}', [SignatoryController::class, 'update']);
+        Route::get('personnel', [SignatoryController::class, 'index']);
+        // Route::delete('signatories/{id}', [SignatoryController::class, 'destroy']);
 
         Route::post('employees/{id}/resign', [EmployeeController::class, 'resign']);
         Route::post('employees/{id}/rehire', [EmployeeController::class, 'rehire']);

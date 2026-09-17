@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             EmployeeSeeder::class,
             HolidaySeeder::class,
             PositionSeeder::class,
+            SignatorySeeder::class,
         ]);
     }
     //  // User::factory(10)->create();  

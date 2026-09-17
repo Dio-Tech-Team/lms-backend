@@ -339,6 +339,7 @@ class EmployeeController extends Controller
     public function update(Request $request, string $id)
     {
 
+        // ADD THIS BLOCK — matches destroy()'s pattern
         $user = $request->user();
         if (!$user || !in_array($user->role, ['hr_admin', 'super_admin'], true)) {
             return response()->json(['message' => 'Forbidden'], 403);
@@ -371,7 +372,11 @@ class EmployeeController extends Controller
             'date_hired' => 'sometimes|date|before_or_equal:today',
         ]);
 
+
+        // $employee = Employee::findOrFail($id);
         $employee->update($validated);
+
+
 
         // NEW — log the update
         ActivityLog::create([
@@ -381,12 +386,6 @@ class EmployeeController extends Controller
             'subject_type' => 'Employee',
             'subject_id'   => $employee->id,
         ]);
-
-        //      // Apply pagination
-        // $query->orderBy('employees.surname')
-        //     ->orderBy('employees.first_name');
-        // $employees = $query->paginate(10);
-
 
         return response()->json([
             'message'  => 'Employee updated successfully',
@@ -1015,6 +1014,45 @@ class EmployeeController extends Controller
 
         return response()->json(['message' => 'Employee rehired successfully']);
     }
+
+    // public function scopeOnLeave($query, $date = null)
+    // {
+    //     $date = $date ?: now()->toDateString();
+
+    //     return $query->whereHas('leaveApplications', fn($a) => $a
+    //         ->where('status', 'approved')
+    //         ->whereDate('start_date', '<=', $date)
+    //         ->whereDate('end_date', '>=', $date));
+    // }
+
+    // $query->when($request->boolean('on_leave'), fn ($q) => $q->onLeave());
+
+
+    //
+
+    //     if ($request->filled('search')) {
+    //     // ...existing...
+    // }
+
+    // // Moved up from below — now serves both the filter and the tagging
+    // $onLeaveIds = LeaveApplication::where('status', 'approved')
+    //     ->whereDate('start_date', '<=', now())
+    //     ->whereDate('end_date', '>=', now())
+    //     ->pluck('employee_id')
+    //     ->toArray();
+
+    // if ($request->filled('on_leave')) {
+    //     $request->boolean('on_leave')
+    //         ? $query->whereIn('employees.id', $onLeaveIds)
+    //         : $query->whereNotIn('employees.id', $onLeaveIds);
+    // }
+
+    // $employees = $query->paginate(10);
+
+    // $employees->getCollection()->transform(function ($employee) use ($onLeaveIds) {
+    //     $employee->is_on_leave = in_array($employee->id, $onLeaveIds);
+    //     return $employee;
+    // });
     public function destroy(string $id)
     {
         // OPTIMIZED: check auth first before any DB query
