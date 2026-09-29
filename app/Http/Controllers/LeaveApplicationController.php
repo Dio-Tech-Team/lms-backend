@@ -15,6 +15,8 @@ use App\Models\ActivityLog;
 use App\Models\Holiday;
 use App\Models\Signatory;
 
+use function Illuminate\Support\months;
+
 class LeaveApplicationController extends Controller
 {
 
@@ -84,12 +86,19 @@ class LeaveApplicationController extends Controller
             // ->when($request->year, function ($query) use ($request) {
             //     $query->whereYear('leave_applications.applied_at', $request->year);
             // })
-            ->when($request->year, function ($query) use ($request) {
-                $query->whereYear('leave_applications.applied_at', $request->year);
+            // ->when($request->year, function ($query) use ($request) {
+            //     $query->whereYear('leave_applications.applied_at', $request->year);
+            // })
+            ->when($request->date_from, function ($query) use ($request) {
+                $query->whereDate('leave_applications.end_date', '>=', $request->date_from);
             })
-            ->when($request->month, function ($query) use ($request) {
-                $query->whereMonth('leave_applications.applied_at', $request->month);
+            ->when($request->date_to, function ($query) use ($request) {
+                $query->whereDate('leave_applications.start_date', '<=', $request->date_to);
             })
+
+            // ->when($request->month, function ($query) use ($request) {
+            //     $query->whereMonth('leave_applications.applied_at', $request->month);
+            // })
             ->when($request->search, function ($query) use ($request) {
                 $query->where(function ($q) use ($request) {
                     $q->where('employees.first_name', 'LIKE', '%' . $request->search . '%')

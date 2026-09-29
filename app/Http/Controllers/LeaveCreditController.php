@@ -205,6 +205,7 @@ class LeaveCreditController extends Controller
             ->toArray();
 
         $creditsToInsert = [];
+        $initializedCount = 0;
 
         $flConfig = LeaveConfiguration::where('code', 'FL')->first();
         foreach ($employees as $employee) {
@@ -220,18 +221,6 @@ class LeaveCreditController extends Controller
                 if ($config->grant_type === 'event_manual') {
                     return false;
                 }
-                // // 3. SEX-BASED ELIGIBILITY GUARD
-                // $femaleOnly = ['ML', 'VAWC', 'SLB', 'STL']; // Adjust codes as per your DB
-                // $maleOnly   = ['PTL'];
-
-                // $sex = strtolower($employee->sex ?? '');
-
-                // if (in_array($config->code, $femaleOnly) && $sex !== 'female') {
-                //     return false;
-                // }
-                // if (in_array($config->code, $maleOnly) && $sex !== 'male') {
-                //     return false;
-                // }
 
                 return in_array('all', $config->application_to) ||
                     in_array($employee->employment_status, $config->application_to);
@@ -239,6 +228,8 @@ class LeaveCreditController extends Controller
 
             // Get already initialized configuration IDs for this employee
             $employeeExistingConfigs = $existingCreditsMap[$employee->id] ?? [];
+
+            $rowsBefore = count($creditsToInsert);
 
             foreach ($eligibleConfigs as $config) {
                 // Check in-memory instead of executing: LeaveCredit::where(...)->exists()
@@ -283,6 +274,10 @@ class LeaveCreditController extends Controller
                     ];
                 }
             }
+
+            if (count($creditsToInsert) > $rowsBefore) {
+                $initializedCount++;
+            }
         }
 
         // Batch insert the new records in chunks of 500 for optimal database batch writes
@@ -299,8 +294,15 @@ class LeaveCreditController extends Controller
             'subject_id'   => null,
         ]);
 
+        $skippedCount = $employees->count() - $initializedCount;
+
+        $message = $initializedCount === 0
+            ? "All active employees already have leave credits for {$targetYear}. Nothing was changed."
+            : "Initialized leave credits for {$initializedCount} employee(s) for {$targetYear}."
+            . ($skippedCount > 0 ? " {$skippedCount} already had credits and were skipped." : '');
+
         return response()->json([
-            'message' => "Successfully initialized all leave credits for the year {$targetYear}!",
+            'message' => $message,
         ]);
     }
     public function grantLeave(Request $request)

@@ -68,9 +68,6 @@ class EmployeeController extends Controller
                     ->orWhere('employees.id_number', 'LIKE', "%{$search}%");
             });
         }
-        // Apply pagination
-        $employees = $query->paginate(10);
-
 
         // Get IDs of employees currently on approved leave — single query, not per-row
         $onLeaveIds = LeaveApplication::where('status', 'approved')
@@ -78,6 +75,16 @@ class EmployeeController extends Controller
             ->whereDate('end_date', '>=', now())
             ->pluck('employee_id')
             ->toArray();
+
+
+        if ($request->filled('on_leave')) {
+            $request->boolean('on_leave')
+                ? $query->whereIn('employees.id', $onLeaveIds)
+                : $query->whereNotIn('employees.id', $onLeaveIds);
+        }
+
+        $employees = $query->paginate(10);
+
 
         // Tag each employee in the paginated collection
         $employees->getCollection()->transform(function ($employee) use ($onLeaveIds) {
@@ -130,11 +137,11 @@ class EmployeeController extends Controller
             'birthdate'                         => 'nullable|date|before:today',
             'place_of_birth'                   => 'nullable|string',
             'sex'                              => 'required|in:male,female',
-            'civil_status'                     => 'required|in:single,married,widowed,separated',
+            'civil_status'                     => 'nullable|in:single,married,widowed,separated',
             'height'                           => 'nullable|string',
             'weight'                           => 'nullable|string',
             'bloodtype'                        => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'highest_educational_attainment'   => 'required|in:elementary,secondary,vocational,college,graduate',
+            'highest_educational_attainment'   => 'nullable|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
             'contact_number'                   => 'nullable|digits:11',
             'umid_id'                          => 'nullable|string',
@@ -355,11 +362,11 @@ class EmployeeController extends Controller
             'birthdate'                         => 'nullable|date|before:today',
             'place_of_birth'                   => 'nullable|string',
             'sex'                              => 'sometimes|in:male,female',
-            'civil_status'                     => 'sometimes|in:single,married,widowed,separated',
+            'civil_status'                     => 'sometimes|nullable|in:single,married,widowed,separated',
             'height'                           => 'nullable|string',
             'weight'                           => 'nullable|string',
             'bloodtype'                        => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'highest_educational_attainment'   => 'sometimes|in:elementary,secondary,vocational,college,graduate',
+            'highest_educational_attainment'   => 'sometimes|nullable|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
             'contact_number'                   => 'nullable|digits:11',
             'umid_id'                          => 'nullable|string',
@@ -1015,44 +1022,6 @@ class EmployeeController extends Controller
         return response()->json(['message' => 'Employee rehired successfully']);
     }
 
-    // public function scopeOnLeave($query, $date = null)
-    // {
-    //     $date = $date ?: now()->toDateString();
-
-    //     return $query->whereHas('leaveApplications', fn($a) => $a
-    //         ->where('status', 'approved')
-    //         ->whereDate('start_date', '<=', $date)
-    //         ->whereDate('end_date', '>=', $date));
-    // }
-
-    // $query->when($request->boolean('on_leave'), fn ($q) => $q->onLeave());
-
-
-    //
-
-    //     if ($request->filled('search')) {
-    //     // ...existing...
-    // }
-
-    // // Moved up from below — now serves both the filter and the tagging
-    // $onLeaveIds = LeaveApplication::where('status', 'approved')
-    //     ->whereDate('start_date', '<=', now())
-    //     ->whereDate('end_date', '>=', now())
-    //     ->pluck('employee_id')
-    //     ->toArray();
-
-    // if ($request->filled('on_leave')) {
-    //     $request->boolean('on_leave')
-    //         ? $query->whereIn('employees.id', $onLeaveIds)
-    //         : $query->whereNotIn('employees.id', $onLeaveIds);
-    // }
-
-    // $employees = $query->paginate(10);
-
-    // $employees->getCollection()->transform(function ($employee) use ($onLeaveIds) {
-    //     $employee->is_on_leave = in_array($employee->id, $onLeaveIds);
-    //     return $employee;
-    // });
     public function destroy(string $id)
     {
         // OPTIMIZED: check auth first before any DB query
