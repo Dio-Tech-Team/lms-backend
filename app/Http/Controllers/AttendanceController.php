@@ -382,6 +382,51 @@ class AttendanceController extends Controller
             $slCredit->save();
         }
     }
+    private function reverseOne(Attendance $attendance): void
+    {
+        $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
+        $slConfig = LeaveConfiguration::where('code', 'SL')->first();
+
+        if ($vlConfig) {
+            $vlCredit = LeaveCredit::where('employee_id', $attendance->employee_id)
+                ->where('leave_configuration_id', $vlConfig->id)
+                ->where('year', $attendance->year)
+                ->lockForUpdate()
+                ->first();
+
+            if ($vlCredit) {
+                // Only the portion the balance actually absorbed was added to
+                // used_credits — the rest became LWOP and never touched it.
+                $absorbed = (float) $attendance->tardiness_equivalent_days
+                    - (float) ($attendance->lwop_days ?? 0);
+
+                $vlCredit->total_credits = max(0, (float) $vlCredit->total_credits - (float) $attendance->vl_earned);
+                $vlCredit->used_credits  = max(0, (float) $vlCredit->used_credits - $absorbed);
+                $vlCredit->last_updated  = now();
+                $vlCredit->save(); // saving hook recomputes remaining_balance
+            }
+        }
+
+        if ($slConfig) {
+            $slCredit = LeaveCredit::where('employee_id', $attendance->employee_id)
+                ->where('leave_configuration_id', $slConfig->id)
+                ->where('year', $attendance->year)
+                ->lockForUpdate()
+                ->first();
+
+            if ($slCredit) {
+                $slCredit->total_credits = max(0, (float) $slCredit->total_credits - (float) $attendance->sl_earned);
+                $slCredit->last_updated  = now();
+                $slCredit->save();
+            }
+        }
+
+        // The tardiness LWOP record is removed by the attendance_id
+        // foreign key's cascade — real leave applications are untouched
+        // because their attendance_id is null.
+        $attendance->delete();
+    }
+
     public function destroy(Request $request, $id)
     {
         $attendance = Attendance::findOrFail($id);
@@ -389,49 +434,7 @@ class AttendanceController extends Controller
         $employee = Employee::find($attendance->employee_id);
         $monthLabel = "{$attendance->month} {$attendance->year}";
 
-        DB::transaction(function () use ($attendance) {
-            $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
-            $slConfig = LeaveConfiguration::where('code', 'SL')->first();
-
-            if ($vlConfig) {
-                $vlCredit = LeaveCredit::where('employee_id', $attendance->employee_id)
-                    ->where('leave_configuration_id', $vlConfig->id)
-                    ->where('year', $attendance->year)
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($vlCredit) {
-                    // Only the portion the balance actually absorbed was added to
-                    // used_credits — the rest became LWOP and never touched it.
-                    $absorbed = (float) $attendance->tardiness_equivalent_days
-                        - (float) ($attendance->lwop_days ?? 0);
-
-                    $vlCredit->total_credits = max(0, (float) $vlCredit->total_credits - (float) $attendance->vl_earned);
-                    $vlCredit->used_credits  = max(0, (float) $vlCredit->used_credits - $absorbed);
-                    $vlCredit->last_updated  = now();
-                    $vlCredit->save(); // saving hook recomputes remaining_balance
-                }
-            }
-
-            if ($slConfig) {
-                $slCredit = LeaveCredit::where('employee_id', $attendance->employee_id)
-                    ->where('leave_configuration_id', $slConfig->id)
-                    ->where('year', $attendance->year)
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($slCredit) {
-                    $slCredit->total_credits = max(0, (float) $slCredit->total_credits - (float) $attendance->sl_earned);
-                    $slCredit->last_updated  = now();
-                    $slCredit->save();
-                }
-            }
-
-            // The tardiness LWOP record is removed by the attendance_id
-            // foreign key's cascade — real leave applications are untouched
-            // because their attendance_id is null.
-            $attendance->delete();
-        });
+        DB::transaction(fn() => $this->reverseOne($attendance));
 
         ActivityLog::create([
             'user_id'      => $request->user()->id,
@@ -442,5 +445,48 @@ class AttendanceController extends Controller
         ]);
 
         return response()->json(['message' => 'Attendance record reversed successfully']);
+    }
+
+    public function reverseMonth(Request $request)
+    {
+        $request->validate([
+            'month' => 'required|integer|min:1|max:12',
+            'year'  => 'required|integer',
+        ]);
+
+        $monthName = Carbon::create($request->year, $request->month, 1)->format('F');
+
+        $records = Attendance::where('month', $monthName)
+            ->where('year', $request->year)
+            ->get();
+
+        if ($records->isEmpty()) {
+            return response()->json([
+                'message' => "No attendance records found for {$monthName} {$request->year}.",
+            ], 404);
+        }
+
+        // One transaction for the whole month — if any record fails,
+        // nothing is reversed.
+        DB::transaction(function () use ($records) {
+            foreach ($records as $attendance) {
+                $this->reverseOne($attendance);
+            }
+        });
+
+        $count = $records->count();
+
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'attendance.bulk_reversed',
+            'description'  => "Reversed attendance for all {$count} employee(s) — {$monthName} {$request->year}. Credits and tardiness deductions restored.",
+            'subject_type' => 'Attendance',
+            'subject_id'   => null,
+        ]);
+
+        return response()->json([
+            'message' => "Reversed attendance for {$count} employee(s) — {$monthName} {$request->year}.",
+            'count'   => $count,
+        ]);
     }
 }
