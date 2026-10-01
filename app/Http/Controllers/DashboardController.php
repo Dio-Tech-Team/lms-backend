@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\LeaveApplication;
 use App\Models\LeaveCredit;
+use App\Models\Employee;
 
 class DashboardController extends Controller
 {
@@ -18,6 +19,19 @@ class DashboardController extends Controller
         $user = $request->user();
         if (!$this->isAdmin($user)) {
             return response()->json(['message' => 'Unauthorized'], 403);
+        }
+        $autoInitMessage = null;
+        $currentYear = now()->year;
+
+        $missingCredits = Employee::where('is_active', true)
+            ->whereNotIn('id', LeaveCredit::where('year', $currentYear)->select('employee_id'))
+            ->exists();
+
+        if ($missingCredits) {
+            $result = app(LeaveCreditController::class)->initializeYear($currentYear, $user->id, true);
+            if ($result['initialized'] > 0) {
+                $autoInitMessage = "Leave credits for {$currentYear} were initialized automatically for {$result['initialized']} employee(s).";
+            }
         }
 
         $year = $request->year ?? now()->year;
@@ -64,6 +78,7 @@ class DashboardController extends Controller
             'monthly_trend'        => $monthlyTrend,
             'leave_type_breakdown' => $leaveTypeBreakdown,
             'low_credit_alerts'    => $lowCreditAlerts,
+            'auto_initialized'     => $autoInitMessage,
         ]);
     }
 }

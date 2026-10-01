@@ -28,10 +28,40 @@ class LeaveCredit extends Model
     ];
     public $timestamps = true;
 
+    // protected static function booted(): void
+    // {
+    //     static::saving(function (LeaveCredit $credit) {
+    //         $credit->remaining_balance = $credit->total_credits - $credit->used_credits;
+    //     });
+    // }
     protected static function booted(): void
     {
         static::saving(function (LeaveCredit $credit) {
             $credit->remaining_balance = $credit->total_credits - $credit->used_credits;
+        });
+
+        // Carry-over sync: next year's VL/SL started from this year's
+        // remaining balance. If this year changes after next year was
+        // initialized (late December upload, late approval, reversal),
+        // push the same difference forward so the carry-over stays right.
+        static::saved(function (LeaveCredit $credit) {
+            $old   = (float) ($credit->getOriginal('remaining_balance') ?? 0);
+            $delta = (float) $credit->remaining_balance - $old;
+
+            if (abs($delta) < 0.0005) return;
+
+            $config = $credit->leaveConfiguration;
+            if (!$config || !$config->can_carry_over) return;
+
+            $next = LeaveCredit::where('employee_id', $credit->employee_id)
+                ->where('leave_configuration_id', $credit->leave_configuration_id)
+                ->where('year', $credit->year + 1)
+                ->first();
+
+            if (!$next) return; // next year not initialized yet — nothing to sync
+
+            $next->total_credits = (float) $next->total_credits + $delta;
+            $next->save(); // fires this hook again, so it chains to later years too
         });
     }
     public function employee()

@@ -185,6 +185,7 @@ class AttendanceController extends Controller
                         $results[] = [
                             'sheet'              => $sheetName,
                             'employee'           => $employee->first_name . ' ' . $employee->surname,
+                            'lwop_days'          => $absentWithoutLeaveDays,
                             'vl_earned'          => $computation['vl_earned'],
                             'sl_earned'          => $computation['sl_earned'],
                             'tardiness_deducted' => $computation['tardiness_equivalent_days'],
