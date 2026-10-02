@@ -89,7 +89,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         // Leave Application Admin Actions
         Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
         Route::post('leave-applications/{id}/reject', [LeaveApplicationController::class, 'reject']);
-
+        Route::post('leave-applications/{id}/cancel-approved', [LeaveApplicationController::class, 'cancelApproved']);
         // Leave Records (HR Management)
         Route::get('leave-records/summary', [LeaveRecordController::class, 'summary']);
         Route::apiResource('leave-records', LeaveRecordController::class)->except(['store']);

@@ -26,6 +26,10 @@ return new class extends Migration
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('reviewed_at')->nullable();
             $table->text('rejection_reason')->nullable();
+            $table->text('cancellation_reason')->nullable();
+            $table->timestamp('cancelled_at')->nullable();
+            $table->date('original_end_date')->nullable();
+            $table->decimal('original_days_applied', 8, 3)->nullable();
             $table->timestamps();
         });
     }
