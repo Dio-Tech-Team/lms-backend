@@ -138,6 +138,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::middleware('role:super_admin')->group(function () {
         // Account Management
         Route::apiResource('users', UserController::class)->only(['index', 'store', 'destroy']);
+        Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword']);
         Route::post('employees', [EmployeeController::class, 'store']);
 
         Route::post('leave-configurations', [LeaveConfigurationController::class, 'store']);
