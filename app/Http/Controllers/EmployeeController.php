@@ -795,7 +795,13 @@ class EmployeeController extends Controller
                     $entries[] = [
                         'sort_date'   => $transferDate,
                         'period'      => $transferDate->format('m-d-y'),
-                        'particulars' => 'Transferred from physical leave card',
+                        // 'particulars' => 'Transferred from physical leave card',
+                        // Everything before the transfer month is already in this balance
+                        'particulars' => 'Transferred from physical leave card'
+                            . ($credit->opening_balance_date
+                                ? ' (covers credits up to '
+                                . $transferDate->copy()->subMonthNoOverflow()->endOfMonth()->format('M j, Y') . ')'
+                                : ''),
                         'earned'      => round((float) $credit->opening_balance, 3),
                         'abs_wp'      => 0,
                         'abs_wop'     => 0,
