@@ -662,6 +662,38 @@ class EmployeeController extends Controller
         $pdf = Pdf::loadView('pdf.leave-card', $data);
         return $pdf->stream("leave-card-{$employee->surname}-{$year}.pdf");
     }
+
+    /**
+     * Plain-language reason for a monthly credit row, so the employee can
+     * see why they earned less than 1.250 or lost VL to tardiness.
+     */
+    private function monthlyParticulars($row, string $type): string
+    {
+        $num = fn($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.');
+        $parts = [];
+
+        $lwop = (float) $row->absent_without_leave_days;
+        if ($lwop > 0) {
+            $parts[] = $num($lwop) . ' day(s) absent w/o leave';
+        }
+
+        // Tardiness only affects VL
+        if ($type === 'vl') {
+            $mins = (int) $row->late_am_minutes + (int) $row->late_pm_minutes
+                + (int) $row->undertime_am_minutes + (int) $row->undertime_pm_minutes;
+
+            if ($mins > 0) {
+                $h = intdiv($mins, 60);
+                $m = $mins % 60;
+                $time = trim(($h ? "{$h}h " : '') . ($m ? "{$m}m" : ''));
+                $parts[] = "{$time} late/UT (−" . $num($row->tardiness_equivalent_days) . ')';
+            }
+        }
+
+        return $parts
+            ? 'Monthly credit: ' . implode('; ', $parts)
+            : 'Monthly credit (full attendance)';
+    }
     private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type, int $year, array $deductionConfigIds = []): array
     {
         $entries = [];
@@ -688,7 +720,8 @@ class EmployeeController extends Controller
             $entries[] = [
                 'sort_date'   => $creditDate,
                 'period'      => $creditDate->format('m-d-y') . ' (' . $creditDate->format('M') . ')',
-                'particulars' => 'Monthly credit',
+                // 'particulars' => 'Monthly credit',
+                'particulars' => $this->monthlyParticulars($row, $type),
                 'earned'      => round($earned, 3),
                 'abs_wp'      => (float) $row->absent_with_leave_days,
                 'abs_wop'     => (float) $row->absent_without_leave_days,
@@ -712,7 +745,12 @@ class EmployeeController extends Controller
                 $entries[] = [
                     'sort_date'   => $start,
                     'period'      => $start->format('m-d-y') . ' to ' . $end->format('m-d-y'),
-                    'particulars' => $rec->leaveConfiguration->name . ' taken',
+                    // 'particulars' => $rec->leaveConfiguration->name . ' taken',
+                    // Tardiness that exceeded the VL balance is also stored as a
+                    // leave record. Label it, or it reads like leave the employee filed.
+                    'particulars' => $rec->attendance_id
+                        ? 'Tardiness exceeded VL balance (LWOP)'
+                        : $rec->leaveConfiguration->name . ' taken',
                     'earned'      => 0,
                     'abs_wp'      => round($withPay, 3),
                     'abs_wop'     => round((float) $rec->no_pay_days, 3),
