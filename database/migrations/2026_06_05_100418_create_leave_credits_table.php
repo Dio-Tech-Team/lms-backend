@@ -20,6 +20,8 @@ return new class extends Migration
             $table->decimal('remaining_balance', 8, 3)->default(0);
             $table->decimal('opening_balance', 8, 3)->default(0)
                 ->comment('One-time starting balance transferred from a physical leave card at onboarding');
+            $table->date('opening_balance_date')->nullable()
+                ->comment('Date the paper leave card balance was transferred into the system');
             $table->year('year');
             $table->index('year');
             $table->timestamp('last_updated')->nullable();

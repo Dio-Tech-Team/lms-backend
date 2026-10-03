@@ -132,6 +132,24 @@ class AttendanceController extends Controller
                             $skipped[] = "[{$sheetName}] {$employee->first_name} {$employee->surname}: already has attendance for {$monthName} {$year}, skipped.";
                             continue;
                         }
+                        // Months before the transfer month are already included in
+                        // the balance copied from the paper leave card
+                        $vlConfigId = LeaveConfiguration::where('code', 'VL')->value('id');
+                        $transferDate = LeaveCredit::where('employee_id', $employee->id)
+                            ->where('leave_configuration_id', $vlConfigId)
+                            ->whereNotNull('opening_balance_date')
+                            ->min('opening_balance_date');
+
+                        if ($transferDate) {
+                            $transferMonthStart = Carbon::parse($transferDate)->startOfMonth();
+                            $uploadMonthStart   = Carbon::create($year, $month, 1)->startOfMonth();
+
+                            if ($uploadMonthStart->lt($transferMonthStart)) {
+                                $skipped[] = "[{$sheetName}] {$employee->first_name} {$employee->surname}: {$monthName} {$year} is already included in the opening balance transferred "
+                                    . Carbon::parse($transferDate)->format('M j, Y') . ', skipped.';
+                                continue;
+                            }
+                        }
 
                         $absentWithLeaveRaw = trim($row[2] ?? '');
                         $absentWithoutLeaveRaw = trim($row[3] ?? '');

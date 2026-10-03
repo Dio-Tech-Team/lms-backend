@@ -718,7 +718,7 @@ class EmployeeController extends Controller
 
 
             $entries[] = [
-                'sort_date'   => $creditDate,
+                'sort_date'   => $creditDate->copy()->endOfMonth(),
                 'period'      => $creditDate->format('m-d-y') . ' (' . $creditDate->format('M') . ')',
                 // 'particulars' => 'Monthly credit',
                 'particulars' => $this->monthlyParticulars($row, $type),
@@ -786,9 +786,15 @@ class EmployeeController extends Controller
                     ->where('opening_balance', '>', 0)
                     ->min('year');
                 if ($year === $earliestCreditYear) {
+
+                    // Actual transfer date; older data falls back to Dec 31 of the prior year
+                    $transferDate = $credit->opening_balance_date
+                        ? \Carbon\Carbon::parse($credit->opening_balance_date)
+                        : $baseDate;
+
                     $entries[] = [
-                        'sort_date'   => $baseDate,
-                        'period'      => $baseDate->format('m-d-y'),
+                        'sort_date'   => $transferDate,
+                        'period'      => $transferDate->format('m-d-y'),
                         'particulars' => 'Transferred from physical leave card',
                         'earned'      => round((float) $credit->opening_balance, 3),
                         'abs_wp'      => 0,
