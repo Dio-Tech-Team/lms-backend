@@ -25,12 +25,11 @@ return new class extends Migration
             $table->date('birthdate')->nullable();
             $table->string('place_of_birth')->nullable();
             $table->enum('sex', ['male', 'female']);
-            $table->enum('civil_status', ['single', 'married', 'widowed', 'separated']);
+            $table->enum('civil_status', ['single', 'married', 'widowed', 'separated'])->nullable();
             $table->string('height')->nullable();
             $table->string('weight')->nullable();
             $table->string('bloodtype')->nullable();
-            $table->enum('highest_educational_attainment', ['elementary', 'secondary', 'vocational', 'college', 'graduate']);
-
+            $table->enum('highest_educational_attainment', ['elementary', 'secondary', 'vocational', 'college', 'graduate'])->nullable();
             // Contact & Address
             $table->string('residential_address')->nullable();
             $table->string('contact_number')->nullable();

@@ -68,9 +68,6 @@ class EmployeeController extends Controller
                     ->orWhere('employees.id_number', 'LIKE', "%{$search}%");
             });
         }
-        // Apply pagination
-        $employees = $query->paginate(10);
-
 
         // Get IDs of employees currently on approved leave — single query, not per-row
         $onLeaveIds = LeaveApplication::where('status', 'approved')
@@ -78,6 +75,16 @@ class EmployeeController extends Controller
             ->whereDate('end_date', '>=', now())
             ->pluck('employee_id')
             ->toArray();
+
+
+        if ($request->filled('on_leave')) {
+            $request->boolean('on_leave')
+                ? $query->whereIn('employees.id', $onLeaveIds)
+                : $query->whereNotIn('employees.id', $onLeaveIds);
+        }
+
+        $employees = $query->paginate(10);
+
 
         // Tag each employee in the paginated collection
         $employees->getCollection()->transform(function ($employee) use ($onLeaveIds) {
@@ -130,11 +137,11 @@ class EmployeeController extends Controller
             'birthdate'                         => 'nullable|date|before:today',
             'place_of_birth'                   => 'nullable|string',
             'sex'                              => 'required|in:male,female',
-            'civil_status'                     => 'required|in:single,married,widowed,separated',
+            'civil_status'                     => 'nullable|in:single,married,widowed,separated',
             'height'                           => 'nullable|string',
             'weight'                           => 'nullable|string',
             'bloodtype'                        => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'highest_educational_attainment'   => 'required|in:elementary,secondary,vocational,college,graduate',
+            'highest_educational_attainment'   => 'nullable|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
             'contact_number'                   => 'nullable|digits:11',
             'umid_id'                          => 'nullable|string',
@@ -355,11 +362,11 @@ class EmployeeController extends Controller
             'birthdate'                         => 'nullable|date|before:today',
             'place_of_birth'                   => 'nullable|string',
             'sex'                              => 'sometimes|in:male,female',
-            'civil_status'                     => 'sometimes|in:single,married,widowed,separated',
+            'civil_status'                     => 'sometimes|nullable|in:single,married,widowed,separated',
             'height'                           => 'nullable|string',
             'weight'                           => 'nullable|string',
             'bloodtype'                        => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'highest_educational_attainment'   => 'sometimes|in:elementary,secondary,vocational,college,graduate',
+            'highest_educational_attainment'   => 'sometimes|nullable|in:elementary,secondary,vocational,college,graduate',
             'residential_address'              => 'nullable|string',
             'contact_number'                   => 'nullable|digits:11',
             'umid_id'                          => 'nullable|string',
@@ -655,6 +662,38 @@ class EmployeeController extends Controller
         $pdf = Pdf::loadView('pdf.leave-card', $data);
         return $pdf->stream("leave-card-{$employee->surname}-{$year}.pdf");
     }
+
+    /**
+     * Plain-language reason for a monthly credit row, so the employee can
+     * see why they earned less than 1.250 or lost VL to tardiness.
+     */
+    private function monthlyParticulars($row, string $type): string
+    {
+        $num = fn($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.');
+        $parts = [];
+
+        $lwop = (float) $row->absent_without_leave_days;
+        if ($lwop > 0) {
+            $parts[] = $num($lwop) . ' day(s) absent w/o leave';
+        }
+
+        // Tardiness only affects VL
+        if ($type === 'vl') {
+            $mins = (int) $row->late_am_minutes + (int) $row->late_pm_minutes
+                + (int) $row->undertime_am_minutes + (int) $row->undertime_pm_minutes;
+
+            if ($mins > 0) {
+                $h = intdiv($mins, 60);
+                $m = $mins % 60;
+                $time = trim(($h ? "{$h}h " : '') . ($m ? "{$m}m" : ''));
+                $parts[] = "{$time} late/UT (−" . $num($row->tardiness_equivalent_days) . ')';
+            }
+        }
+
+        return $parts
+            ? 'Monthly credit: ' . implode('; ', $parts)
+            : 'Monthly credit (full attendance)';
+    }
     private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type, int $year, array $deductionConfigIds = []): array
     {
         $entries = [];
@@ -679,9 +718,10 @@ class EmployeeController extends Controller
 
 
             $entries[] = [
-                'sort_date'   => $creditDate,
+                'sort_date'   => $creditDate->copy()->endOfMonth(),
                 'period'      => $creditDate->format('m-d-y') . ' (' . $creditDate->format('M') . ')',
-                'particulars' => 'Monthly credit',
+                // 'particulars' => 'Monthly credit',
+                'particulars' => $this->monthlyParticulars($row, $type),
                 'earned'      => round($earned, 3),
                 'abs_wp'      => (float) $row->absent_with_leave_days,
                 'abs_wop'     => (float) $row->absent_without_leave_days,
@@ -705,7 +745,12 @@ class EmployeeController extends Controller
                 $entries[] = [
                     'sort_date'   => $start,
                     'period'      => $start->format('m-d-y') . ' to ' . $end->format('m-d-y'),
-                    'particulars' => $rec->leaveConfiguration->name . ' taken',
+                    // 'particulars' => $rec->leaveConfiguration->name . ' taken',
+                    // Tardiness that exceeded the VL balance is also stored as a
+                    // leave record. Label it, or it reads like leave the employee filed.
+                    'particulars' => $rec->attendance_id
+                        ? 'Tardiness exceeded VL balance (LWOP)'
+                        : $rec->leaveConfiguration->name . ' taken',
                     'earned'      => 0,
                     'abs_wp'      => round($withPay, 3),
                     'abs_wop'     => round((float) $rec->no_pay_days, 3),
@@ -741,9 +786,21 @@ class EmployeeController extends Controller
                     ->where('opening_balance', '>', 0)
                     ->min('year');
                 if ($year === $earliestCreditYear) {
+
+                    // Actual transfer date; older data falls back to Dec 31 of the prior year
+                    $transferDate = $credit->opening_balance_date
+                        ? \Carbon\Carbon::parse($credit->opening_balance_date)
+                        : $baseDate;
+
+                    $asOfDate = $credit->opening_balance_date
+                        ? $transferDate->copy()->subMonthNoOverflow()->endOfMonth()
+                        : $transferDate;
+
+
                     $entries[] = [
-                        'sort_date'   => $baseDate,
-                        'period'      => $baseDate->format('m-d-y'),
+                        'sort_date'   => $asOfDate,
+                        // 'period'      => $transferDate->format('m-d-y'),
+                        'period'      => $asOfDate->format('m-d-y') . ' (' . $asOfDate->format('M') . ')',
                         'particulars' => 'Transferred from physical leave card',
                         'earned'      => round((float) $credit->opening_balance, 3),
                         'abs_wp'      => 0,
@@ -1015,44 +1072,6 @@ class EmployeeController extends Controller
         return response()->json(['message' => 'Employee rehired successfully']);
     }
 
-    // public function scopeOnLeave($query, $date = null)
-    // {
-    //     $date = $date ?: now()->toDateString();
-
-    //     return $query->whereHas('leaveApplications', fn($a) => $a
-    //         ->where('status', 'approved')
-    //         ->whereDate('start_date', '<=', $date)
-    //         ->whereDate('end_date', '>=', $date));
-    // }
-
-    // $query->when($request->boolean('on_leave'), fn ($q) => $q->onLeave());
-
-
-    //
-
-    //     if ($request->filled('search')) {
-    //     // ...existing...
-    // }
-
-    // // Moved up from below — now serves both the filter and the tagging
-    // $onLeaveIds = LeaveApplication::where('status', 'approved')
-    //     ->whereDate('start_date', '<=', now())
-    //     ->whereDate('end_date', '>=', now())
-    //     ->pluck('employee_id')
-    //     ->toArray();
-
-    // if ($request->filled('on_leave')) {
-    //     $request->boolean('on_leave')
-    //         ? $query->whereIn('employees.id', $onLeaveIds)
-    //         : $query->whereNotIn('employees.id', $onLeaveIds);
-    // }
-
-    // $employees = $query->paginate(10);
-
-    // $employees->getCollection()->transform(function ($employee) use ($onLeaveIds) {
-    //     $employee->is_on_leave = in_array($employee->id, $onLeaveIds);
-    //     return $employee;
-    // });
     public function destroy(string $id)
     {
         // OPTIMIZED: check auth first before any DB query

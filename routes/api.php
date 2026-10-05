@@ -90,7 +90,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         // Leave Application Admin Actions
         Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
         Route::post('leave-applications/{id}/reject', [LeaveApplicationController::class, 'reject']);
-
+        Route::post('leave-applications/{id}/cancel-approved', [LeaveApplicationController::class, 'cancelApproved']);
         // Leave Records (HR Management)
         Route::get('leave-records/summary', [LeaveRecordController::class, 'summary']);
         Route::apiResource('leave-records', LeaveRecordController::class)->except(['store']);
@@ -103,6 +103,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         // Attendance Admin
         Route::post('attendance/upload', [AttendanceController::class, 'upload']);
         Route::get('attendance/missing-check', [AttendanceController::class, 'checkMissingAttendance']);
+        Route::post('attendance/reverse-month', [AttendanceController::class, 'reverseMonth']);
         Route::delete('attendance/{id}', [AttendanceController::class, 'destroy']);
 
         // --- Promotion History ---
@@ -138,6 +139,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::middleware('role:super_admin')->group(function () {
         // Account Management
         Route::apiResource('users', UserController::class)->only(['index', 'store', 'destroy']);
+        Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword']);
         Route::post('employees', [EmployeeController::class, 'store']);
 
         Route::post('leave-configurations', [LeaveConfigurationController::class, 'store']);

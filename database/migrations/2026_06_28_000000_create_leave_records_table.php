@@ -17,6 +17,7 @@ return new class extends Migration
             $table->foreignId('leave_configuration_id')->constrained('leave_configurations')->onDelete('cascade');
             $table->foreignId('recorded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('attendance_id')->nullable()->constrained('attendances')->cascadeOnDelete();
+            $table->foreignId('leave_application_id')->nullable()->constrained('leave_applications')->nullOnDelete();
             $table->date('start_date');
             $table->date('end_date');
             $table->decimal('days_taken', 8, 3);

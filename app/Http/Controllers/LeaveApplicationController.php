@@ -15,6 +15,8 @@ use App\Models\ActivityLog;
 use App\Models\Holiday;
 use App\Models\Signatory;
 
+use function Illuminate\Support\months;
+
 class LeaveApplicationController extends Controller
 {
 
@@ -39,6 +41,10 @@ class LeaveApplicationController extends Controller
             'leave_applications.reviewed_at',
             'leave_applications.rejection_reason',
             'leave_applications.reviewed_by',
+            'leave_applications.cancelled_at',
+            'leave_applications.cancellation_reason',
+            'leave_applications.original_end_date',
+            'leave_applications.original_days_applied',
             'employees.first_name',
             'employees.surname',
             'departments.name as department_name',
@@ -84,12 +90,19 @@ class LeaveApplicationController extends Controller
             // ->when($request->year, function ($query) use ($request) {
             //     $query->whereYear('leave_applications.applied_at', $request->year);
             // })
-            ->when($request->year, function ($query) use ($request) {
-                $query->whereYear('leave_applications.applied_at', $request->year);
+            // ->when($request->year, function ($query) use ($request) {
+            //     $query->whereYear('leave_applications.applied_at', $request->year);
+            // })
+            ->when($request->date_from, function ($query) use ($request) {
+                $query->whereDate('leave_applications.end_date', '>=', $request->date_from);
             })
-            ->when($request->month, function ($query) use ($request) {
-                $query->whereMonth('leave_applications.applied_at', $request->month);
+            ->when($request->date_to, function ($query) use ($request) {
+                $query->whereDate('leave_applications.start_date', '<=', $request->date_to);
             })
+
+            // ->when($request->month, function ($query) use ($request) {
+            //     $query->whereMonth('leave_applications.applied_at', $request->month);
+            // })
             ->when($request->search, function ($query) use ($request) {
                 $query->where(function ($q) use ($request) {
                     $q->where('employees.first_name', 'LIKE', '%' . $request->search . '%')
@@ -297,6 +310,7 @@ class LeaveApplicationController extends Controller
                 LeaveRecord::create([
                     'employee_id'            => $employee->id,
                     'leave_configuration_id' => $validated['leave_configuration_id'],
+                    'leave_application_id'   => $app->id,
                     'recorded_by'            => $request->user()->id,
                     'start_date'             => $validated['start_date'],
                     'end_date'               => $validated['end_date'],
@@ -426,6 +440,7 @@ class LeaveApplicationController extends Controller
             LeaveRecord::create([
                 'employee_id'            => $application->employee_id,
                 'leave_configuration_id' => $application->leave_configuration_id,
+                'leave_application_id'   => $application->id,
                 'recorded_by'            => $request->user()->id,
                 'start_date'             => $application->start_date,
                 'end_date'               => $application->end_date,
@@ -532,6 +547,177 @@ class LeaveApplicationController extends Controller
         ]);
 
         return response()->json(['message' => 'Leave application cancelled successfully']);
+    }
+
+    /**
+     * Cancel an APPROVED leave and refund unused credits (HR/admin only).
+     * Not started, or none taken → full cancel, everything refunded.
+     * Ongoing → HR gives the last day actually taken; the rest is refunded.
+     * Already ended → refused.
+     */
+    public function cancelApproved(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'reason'         => 'required|string|max:1000',
+            'last_day_taken' => 'nullable|date',
+            'none_taken'     => 'nullable|boolean',
+            'dry_run'        => 'nullable|boolean',
+        ]);
+
+        $application = LeaveApplication::with('leaveConfiguration')->findOrFail($id);
+        $config = $application->leaveConfiguration;
+
+        if ($application->status !== 'approved') {
+            return response()->json(['message' => 'Only approved applications can be cancelled here.'], 422);
+        }
+
+        $start = Carbon::parse($application->start_date)->startOfDay();
+        $end   = Carbon::parse($application->end_date)->startOfDay();
+        $today = now()->startOfDay();
+
+        if ($end->lt($today)) {
+            return response()->json(['message' => 'This leave has already ended and cannot be cancelled.'], 422);
+        }
+
+        $lastDay  = null;
+        $daysUsed = 0;
+
+        if ($start->lte($today) && !$request->boolean('none_taken')) {
+            // Ongoing — HR must say when the employee actually stopped
+            if (empty($validated['last_day_taken'])) {
+                return response()->json([
+                    'message' => 'This leave has started. Enter the last day of leave actually taken, or mark that no days were taken.',
+                ], 422);
+            }
+
+            $lastDay = Carbon::parse($validated['last_day_taken'])->startOfDay();
+
+            if ($lastDay->lt($start) || $lastDay->gte($end) || $lastDay->gt($today)) {
+                return response()->json([
+                    'message' => 'Last day taken must be between the start date and today, and before the original end date.',
+                ], 422);
+            }
+
+            // Same counting rule approve() used
+            $daysUsed = $config->grant_type === 'event_manual'
+                ? $start->diffInDays($lastDay) + 1
+                : $this->calculateWorkingDays($start->toDateString(), $lastDay->toDateString());
+        }
+
+        $refundDays = round((float) $application->days_applied - $daysUsed, 3);
+
+        if ($refundDays <= 0) {
+            return response()->json(['message' => 'No unused leave days to cancel.'], 422);
+        }
+
+        $originalLabel = $start->toDateString() . ' to ' . $end->toDateString();
+        // Preview only — same numbers the real cancel would use, nothing saved
+        if ($request->boolean('dry_run')) {
+            $record = LeaveRecord::where('leave_application_id', $application->id)->first();
+            $noPay  = (float) ($record->no_pay_days ?? 0);
+            $lwopRemoved     = min($noPay, $refundDays);
+            $creditsReturned = round($refundDays - $lwopRemoved, 3);
+
+            return response()->json([
+                'full_cancel'      => $daysUsed == 0,
+                'start_date'       => $start->toDateString(),
+                'end_date'         => $end->toDateString(),
+                'new_end_date'     => $lastDay?->toDateString(),
+                'days_applied'     => (float) $application->days_applied,
+                'days_used'        => $daysUsed,
+                'days_cancelled'   => $refundDays,
+                'credits_returned' => $creditsReturned,
+                'lwop_removed'     => $lwopRemoved,
+                'credit_code'      => $config->code === 'FL' ? 'VL' : $config->code,
+            ]);
+        }
+
+        DB::transaction(function () use ($application, $config, $validated, $lastDay, $daysUsed, $refundDays, $request, $originalLabel) {
+            $record = LeaveRecord::where('leave_application_id', $application->id)
+                ->lockForUpdate()
+                ->first();
+
+            // Fallback for applications approved before leave_application_id existed
+            if (!$record) {
+                $record = LeaveRecord::where('employee_id', $application->employee_id)
+                    ->where('leave_configuration_id', $application->leave_configuration_id)
+                    ->whereDate('start_date', $application->start_date)
+                    ->whereDate('end_date', $application->end_date)
+                    ->whereNull('attendance_id')
+                    ->latest('id')
+                    ->lockForUpdate()
+                    ->first();
+            }
+
+            // Unpaid days are the tail of the leave (balance ran out partway),
+            // so cancelling the tail removes LWOP days before returning credits
+            $noPay        = (float) ($record->no_pay_days ?? 0);
+            $lwopRefund   = min($noPay, $refundDays);
+            $creditRefund = round($refundDays - $lwopRefund, 3);
+
+            if ($creditRefund > 0) {
+                $targetCode = $config->code === 'FL' ? 'VL' : $config->code;
+                $year = Carbon::parse($application->start_date)->year;
+
+                $credit = LeaveCredit::where('employee_id', $application->employee_id)
+                    ->whereHas('leaveConfiguration', fn($q) => $q->where('code', $targetCode))
+                    ->where('year', $year)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($credit) {
+                    $credit->used_credits = max(0, (float) $credit->used_credits - $creditRefund);
+                    $credit->last_updated = now();
+                    $credit->save(); // recomputes remaining_balance + carry-over sync
+                }
+            }
+
+            if ($daysUsed == 0) {
+                // Full cancel
+                $application->update([
+                    'status'              => 'cancelled',
+                    'cancellation_reason' => $validated['reason'],
+                    'cancelled_at'        => now(),
+                    'original_end_date'     => $application->original_end_date ?? $application->end_date,
+                    'original_days_applied' => $application->original_days_applied ?? $application->days_applied,
+                ]);
+                $record?->delete();
+            } else {
+                // Partial — shorten to what was actually taken
+                $application->update([
+                    'original_end_date'     => $application->original_end_date ?? $application->end_date,
+                    'original_days_applied' => $application->original_days_applied ?? $application->days_applied,
+                    'end_date'            => $lastDay->toDateString(),
+                    'days_applied'        => $daysUsed,
+                    'cancellation_reason' => $validated['reason'],
+                    'cancelled_at'        => now(),
+                ]);
+                $record?->update([
+                    'end_date'    => $lastDay->toDateString(),
+                    'days_taken'  => $daysUsed,
+                    'no_pay_days' => round($noPay - $lwopRefund, 3),
+                    'remarks'     => trim(($record->remarks ?? '') . " Partially cancelled: {$refundDays} day(s) returned."),
+                ]);
+            }
+
+            ActivityLog::create([
+                'user_id'      => $request->user()->id,
+                'action'       => $daysUsed == 0 ? 'leave_application.approved_cancelled' : 'leave_application.partially_cancelled',
+                'description'  => ($daysUsed == 0
+                    ? "Cancelled approved leave application #{$application->id} ({$config->name}, {$originalLabel})"
+                    : "Partially cancelled leave application #{$application->id} ({$config->name}, {$originalLabel}), last day taken {$lastDay->toDateString()}")
+                    . ". {$refundDays} day(s) returned. Reason: {$validated['reason']}",
+                'subject_type' => 'LeaveApplication',
+                'subject_id'   => $application->id,
+            ]);
+        });
+
+        return response()->json([
+            'message'       => $daysUsed == 0
+                ? "Leave cancelled. {$refundDays} day(s) returned."
+                : "Leave shortened to {$daysUsed} day(s). {$refundDays} day(s) returned.",
+            'refunded_days' => $refundDays,
+        ]);
     }
 
     public function show(Request $request, string $id)
@@ -685,28 +871,6 @@ class LeaveApplicationController extends Controller
         $vlCredit  = $credits->get($vlId);
         $slCredit  = $credits->get($slId);
 
-        // --- PROJECTED BALANCES FOR THE PDF ONLY {{NEW}} ---
-        // $vlBalance = $vlCredit?->remaining_balance ?? 0;
-        // $slBalance = $slCredit?->remaining_balance ?? 0;
-
-
-        // // If the application is still pending, preview the deduction on the form based on type {{NEW}}
-        // $vlTotal = $vlCredit?->remaining_balance ?? 0;
-        // $slTotal = $slCredit?->remaining_balance ?? 0;
-
-        // if ($application->status === 'approved') {
-        //     // deductLeave() already ran — add the days back to show the before figure
-        //     $days = (float) $application->days_applied;
-        //     if ($code === 'VL' || $code === 'FL') {
-        //         $vlTotal += $days;
-        //     } elseif ($code === 'SL') {
-        //         $slTotal += $days;
-        //     }
-        // }
-        // // -------------------------------------------
-
-        // // Days without pay live on the LeaveRecord created at approval,
-        // // not on the application itself.
         // $leaveRecord = LeaveRecord::where('employee_id', $application->employee_id)
         //     ->where('leave_configuration_id', $application->leave_configuration_id)
         //     ->where('start_date', $application->start_date)
@@ -714,19 +878,8 @@ class LeaveApplicationController extends Controller
         //     ->latest('id')
         //     ->first();
 
-        // $data = [
-        //     'application' => $application,
-        //     'code'        => $code,
-        //     'no_pay_days' => $leaveRecord->no_pay_days ?? 0,
-
-        //     'vl_total'    => number_format($vlCredit->total_credits ?? 0, 3, '.', ''),
-        //     'vl_balance'  => number_format($vlBalance, 3, '.', ''),
-        //     'sl_total'    => number_format($slCredit->total_credits ?? 0, 3, '.', ''),
-        //     'sl_balance'  => number_format($slBalance, 3, '.', ''),
-        // ];
-        // Days without pay live on the LeaveRecord created at approval,
-        // not on the application itself.
-        $leaveRecord = LeaveRecord::where('employee_id', $application->employee_id)
+        $leaveRecord = LeaveRecord::where('leave_application_id', $application->id)->first()
+            ?? LeaveRecord::where('employee_id', $application->employee_id)
             ->where('leave_configuration_id', $application->leave_configuration_id)
             ->where('start_date', $application->start_date)
             ->where('end_date', $application->end_date)

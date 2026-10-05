@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
+use App\Models\ActivityLog;
 
 class UserController extends Controller
 {
@@ -15,6 +17,12 @@ class UserController extends Controller
     {
         return User::select('id', 'username', 'email', 'role', 'created_at')
             ->when($request->filled('role'), fn($q) => $q->where('role', $request->role))
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $q->where(function ($q) use ($request) {
+                    $q->where('username', 'LIKE', '%' . $request->search . '%')
+                        ->orWhere('email', 'LIKE', '%' . $request->search . '%');
+                });
+            })
             ->orderBy('username')
             ->paginate(20);
     }
@@ -56,5 +64,41 @@ class UserController extends Controller
         $user->delete();
 
         return response()->json(['message' => 'Account deleted.']);
+    }
+    // Reset a locked-out user's password. Employees get their ID number
+    // (same as account creation); admin accounts get a random password.
+    // Either way they must change it on next login.
+    public function resetPassword(User $user, Request $request)
+    {
+        if ($user->id === $request->user()->id) {
+            return response()->json([
+                'message' => 'You cannot reset your own password here. Use Change Password instead.',
+            ], 422);
+        }
+
+        $employee = $user->employee;
+        $tempPassword = $employee?->id_number ?: Str::random(10);
+
+        $user->password = Hash::make($tempPassword);
+        $user->must_change_password = true;
+        $user->save();
+
+        // Log out every device still using the old password
+        $user->tokens()->delete();
+
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'user.password_reset',
+            'description'  => "Reset password for {$user->username}",
+            'subject_type' => 'User',
+            'subject_id'   => $user->id,
+        ]);
+
+        return response()->json([
+            'message'            => "Password reset for {$user->username}.",
+            'username'           => $user->username,
+            'temporary_password' => $tempPassword,
+            'is_id_number'       => (bool) $employee?->id_number,
+        ]);
     }
 }

@@ -22,6 +22,10 @@ class LeaveApplication extends Model
         'reviewed_by',
         'reviewed_at',
         'rejection_reason',
+        'cancellation_reason',
+        'cancelled_at',
+        'original_end_date',
+        'original_days_applied',
 
     ];
 
@@ -30,6 +34,9 @@ class LeaveApplication extends Model
         'end_date'    => 'date',
         'applied_at'  => 'datetime',
         'reviewed_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'original_end_date'     => 'date',
+        'original_days_applied' => 'decimal:3',
         'days_applied' => 'decimal:3',
     ];
 
