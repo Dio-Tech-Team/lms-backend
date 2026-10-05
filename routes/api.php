@@ -51,6 +51,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('positions', [PositionController::class, 'index']);
     //mobile
     Route::get('/dashboard/balances', [LeaveCreditController::class, 'getLeaveCreditBalances']);
+    Route::get('/my-attendance', [AttendanceController::class, 'myAttendance']);
 
     // --- Leave Applications (General) ---
     Route::prefix('leave-applications')->group(function () {

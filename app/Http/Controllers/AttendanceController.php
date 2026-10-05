@@ -443,4 +443,39 @@ class AttendanceController extends Controller
 
         return response()->json(['message' => 'Attendance record reversed successfully']);
     }
+
+    public function myAttendance(Request $request)
+    {
+        $employee = $request->user()->employee;
+
+        if (!$employee) {
+            return response()->json(['message' => 'Employee profile not found.'], 422);
+        }
+
+        $rows = Attendance::where('employee_id', $employee->id)
+            ->when($request->year, fn($q, $y) => $q->where('year', $y))
+            ->get()
+            ->map(function ($a) {
+                $period = Carbon::parse("1 {$a->month} {$a->year}");
+
+                return [
+                    'id'                        => $a->id,
+                    'period'                    => $period->toDateString(), // e.g. 2026-09-01, sortable
+                    'month'                     => $a->month,
+                    'year'                      => $a->year,
+                    'late_am_minutes'           => $a->late_am_minutes,
+                    'late_pm_minutes'           => $a->late_pm_minutes,
+                    'undertime_am_minutes'      => $a->undertime_am_minutes,
+                    'undertime_pm_minutes'      => $a->undertime_pm_minutes,
+                    'tardiness_equivalent_days' => $a->tardiness_equivalent_days,
+                    'lwop_days'                 => $a->lwop_days,
+                    'absent_with_leave_days'    => $a->absent_with_leave_days,
+                    'absent_without_leave_days' => $a->absent_without_leave_days,
+                ];
+            })
+            ->sortByDesc('period')
+            ->values();
+
+        return response()->json(['data' => $rows]);
+    }
 }
