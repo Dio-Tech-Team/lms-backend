@@ -14,6 +14,7 @@ class LeaveRecord extends Model
         'employee_id',
         'leave_configuration_id',
         'attendance_id',
+        'slip_id',
         'leave_application_id',
         'recorded_by',
         'start_date',

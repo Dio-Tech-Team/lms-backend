@@ -750,14 +750,39 @@ class EmployeeController extends Controller
                     // leave record. Label it, or it reads like leave the employee filed.
                     'particulars' => $rec->attendance_id
                         ? 'Tardiness exceeded VL balance (LWOP)'
-                        : $rec->leaveConfiguration->name . ' taken',
+                        : ($rec->slip_id
+                            ? 'Personal slip exceeded VL balance (LWOP)'
+                            : $rec->leaveConfiguration->name . ' taken'),
                     'earned'      => 0,
                     'abs_wp'      => round($withPay, 3),
                     'abs_wop'     => round((float) $rec->no_pay_days, 3),
                     'used'        => round($withPay, 3),
                 ];
             }
+            // Personal slips deduct VL only
+            if ($type === 'vl') {
+                $slips = \App\Models\Slip::where('employee_id', $employee->id)
+                    ->where('status', 'active')
+                    ->whereYear('date', $year)
+                    ->get();
 
+                foreach ($slips as $slip) {
+                    $h = intdiv($slip->minutes, 60);
+                    $m = $slip->minutes % 60;
+                    $time = trim(($h ? "{$h}h " : '') . ($m ? "{$m}m" : ''));
+
+                    $entries[] = [
+                        'sort_date'   => $slip->date,
+                        'period'      => $slip->date->format('m-d-y'),
+                        'particulars' => "Personal slip ({$time})",
+                        'earned'      => 0,
+                        'abs_wp'      => 0,
+                        'abs_wop'     => 0,
+                        // Only what VL absorbed; any excess shows as its own LWOP row
+                        'used'        => round($slip->equivalent_days - $slip->lwop_days, 3),
+                    ];
+                }
+            }
             $monetizations = \App\Models\LeaveMonetization::where('employee_id', $employee->id)
                 ->where('leave_configuration_id', $config->id)
                 ->where('status', 'approved')

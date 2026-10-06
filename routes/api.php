@@ -19,7 +19,8 @@ use App\Http\Controllers\{
     HolidayController,
     PositionController,
     ReportController,
-    SignatoryController
+    SignatoryController,
+    SlipController
 };
 
 Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
@@ -105,6 +106,11 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('attendance/missing-check', [AttendanceController::class, 'checkMissingAttendance']);
         Route::post('attendance/reverse-month', [AttendanceController::class, 'reverseMonth']);
         Route::delete('attendance/{id}', [AttendanceController::class, 'destroy']);
+
+        // Personal Slips
+        Route::get('slips', [SlipController::class, 'index']);
+        Route::post('slips', [SlipController::class, 'store']);
+        Route::post('slips/{id}/cancel', [SlipController::class, 'cancel']);
 
         // --- Promotion History ---
         Route::prefix('employees/{employeeId}/promotions')->group(function () {
