@@ -138,6 +138,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
             Route::get('/employee-masterlist', [ReportController::class, 'employeeMasterlist']);
             Route::get('/leave-balances', [ReportController::class, 'leaveBalances']);
             Route::get('/leave-utilization', [ReportController::class, 'leaveUtilization']);
+            Route::get('/lwop', [ReportController::class, 'lwop']);
         });
     });
 

@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\LeaveConfiguration;
 use App\Models\LeaveCredit;
 use App\Models\LeaveRecord;
+use App\Models\Attendance;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -347,6 +348,146 @@ class ReportController extends Controller
     }
 
     // -----------------------------------------------------------------
+        // -----------------------------------------------------------------
+    // 4. Leave Without Pay (LWOP)
+    // -----------------------------------------------------------------
+
+    /**
+     * Every LWOP day in the period, for payroll. Two sources:
+     * - leave_records.no_pay_days: applications that exceeded the balance,
+     *   and tardiness that exceeded VL (attendance_id set)
+     * - attendances.absent_without_leave_days: column D of the attendance
+     *   file, all employees (only casual have earning reduced, but all are unpaid)
+     */
+    public function lwop(Request $request)
+    {
+        $validated = $request->validate([
+            'year'          => 'nullable|integer|min:2020|max:2099',
+            'month'         => 'nullable|integer|min:1|max:12',
+            'department_id' => 'nullable|exists:departments,id',
+            'format'        => 'nullable|in:json,xlsx',
+        ]);
+
+        $year  = $validated['year'] ?? now()->year;
+        $month = $validated['month'] ?? null;
+
+        $fullName = fn($r) => trim("{$r->surname}, {$r->first_name} " . ($r->middle_name ?? ''));
+        $status   = fn($r) => ucfirst(str_replace('_', ' ', $r->employment_status));
+
+        // Source 1: leave records with unpaid days
+        $fromRecords = LeaveRecord::select([
+            'leave_records.start_date',
+            'leave_records.end_date',
+            'leave_records.no_pay_days',
+            'leave_records.attendance_id',
+            'leave_records.slip_id',
+            'employees.first_name',
+            'employees.middle_name',
+            'employees.surname',
+            'employees.id_number',
+            'employees.employment_status',
+            'departments.name as department_name',
+            'leave_configurations.name as leave_type_name',
+        ])
+            ->join('employees', 'leave_records.employee_id', '=', 'employees.id')
+            ->join('departments', 'employees.department_id', '=', 'departments.id')
+            ->join('leave_configurations', 'leave_records.leave_configuration_id', '=', 'leave_configurations.id')
+            ->where('leave_records.no_pay_days', '>', 0)
+            ->whereYear('leave_records.start_date', $year)
+            ->when($month, fn($q) => $q->whereMonth('leave_records.start_date', $month))
+            ->when($request->filled('department_id'), fn($q) => $q->where('employees.department_id', $request->department_id))
+            ->get()
+            ->map(function ($r) use ($fullName, $status) {
+                $start = Carbon::parse($r->start_date);
+                $end   = Carbon::parse($r->end_date);
+
+                return [
+                    'name'              => $fullName($r),
+                    'id_number'         => $r->id_number,
+                    'department'        => $r->department_name,
+                    'employment_status' => $status($r),
+                    'period'            => $start->format('F Y'),
+                    'source'            => $r->attendance_id
+                        ? 'Tardiness/undertime exceeded VL balance'
+                        : ($r->slip_id
+                            ? 'Personal slip exceeded VL balance'
+                            : "{$r->leave_type_name} exceeded balance"),
+                    'dates'             => $r->attendance_id
+                        ? ''
+                        : ($start->isSameDay($end)
+                            ? $start->format('M j')
+                            : $start->format('M j') . ' – ' . $end->format('M j')),
+                    'lwop_days'         => (float) $r->no_pay_days,
+                    'sort'              => $start->format('Y-m-d'),
+                ];
+            });
+
+        // Source 2: attendance file column D, all statuses
+        $fromAttendance = Attendance::select([
+            'attendances.month',
+            'attendances.year',
+            'attendances.absent_without_leave_days',
+            'employees.first_name',
+            'employees.middle_name',
+            'employees.surname',
+            'employees.id_number',
+            'employees.employment_status',
+            'departments.name as department_name',
+        ])
+            ->join('employees', 'attendances.employee_id', '=', 'employees.id')
+            ->join('departments', 'employees.department_id', '=', 'departments.id')
+            ->where('attendances.absent_without_leave_days', '>', 0)
+            ->where('attendances.year', $year)
+            ->when($month, fn($q) => $q->where('attendances.month', Carbon::create($year, $month, 1)->format('F')))
+            ->when($request->filled('department_id'), fn($q) => $q->where('employees.department_id', $request->department_id))
+            ->get()
+            ->map(fn($a) => [
+                'name'              => $fullName($a),
+                'id_number'         => $a->id_number,
+                'department'        => $a->department_name,
+                'employment_status' => $status($a),
+                'period'            => "{$a->month} {$a->year}",
+                'source'            => 'Absent without leave (attendance file)',
+                'dates'             => '',
+                'lwop_days'         => (float) $a->absent_without_leave_days,
+                'sort'              => Carbon::parse("1 {$a->month} {$a->year}")->format('Y-m-d'),
+            ]);
+
+        $rows = $fromRecords->concat($fromAttendance)
+            ->sortBy([['sort', 'asc'], ['name', 'asc']])
+            ->map(function ($r) {
+                unset($r['sort']);
+                return $r;
+            })
+            ->values();
+
+        $summary = [
+            'employees'       => $rows->pluck('id_number')->unique()->count(),
+            'total_lwop_days' => round($rows->sum('lwop_days'), 3),
+        ];
+
+        $periodLabel = $month
+            ? Carbon::create($year, $month, 1)->format('F Y')
+            : "Year $year";
+
+        if (($validated['format'] ?? 'json') === 'json') {
+            return response()->json([
+                'report'       => 'Leave Without Pay',
+                'period'       => $periodLabel,
+                'generated_at' => now()->toDateTimeString(),
+                'summary'      => $summary,
+                'rows'         => $rows,
+            ]);
+        }
+
+        return $this->streamXlsx(
+            title: 'Leave Without Pay Report',
+            subtitle: "$periodLabel · {$summary['employees']} employee(s) · {$summary['total_lwop_days']} day(s)",
+            headers: ['Employee', 'ID Number', 'Department', 'Status', 'Period', 'Source', 'Dates', 'LWOP Days'],
+            rows: $rows->map(fn($r) => array_values($r))->toArray(),
+            filename: 'lwop-' . ($month ? "$year-$month" : $year) . '.xlsx',
+        );
+    }
     // Shared writer
     // -----------------------------------------------------------------
 
