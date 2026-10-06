@@ -33,6 +33,8 @@ class LeaveMonetizationController extends Controller
             'leave_monetizations.approved_days',
             'leave_monetizations.reason',
             'leave_monetizations.rejection_reason',
+            'leave_monetizations.cancellation_reason',
+            'leave_monetizations.cancelled_at',
             'leave_monetizations.status',
             'leave_monetizations.applied_at',
             'leave_monetizations.reviewed_at',
@@ -332,6 +334,71 @@ class LeaveMonetizationController extends Controller
 
         return response()->json(['message' => 'Monetization approved successfully']);
     }
+
+
+    /// Reverses an approved monetization: returns the deducted days to the
+    /// balance. Approval always left at least MIN_RETAINED_BALANCE, so the
+    /// full approved amount went into used_credits — no LWOP to undo.
+    public function cancelApproved(Request $request, $id)
+    {
+        $monetization = LeaveMonetization::with('employee:id,first_name,surname')->findOrFail($id);
+
+        if ($monetization->status !== 'approved') {
+            return response()->json(['message' => 'Only approved monetizations can be reversed. This one is ' . $monetization->status . '.'], 400);
+        }
+
+        $validated = $request->validate([
+            'cancellation_reason' => 'required|string|max:1000',
+        ]);
+
+        $error = DB::transaction(function () use ($monetization, $request, $validated) {
+            $year = \Carbon\Carbon::parse($monetization->applied_at)->year;
+
+            $credit = LeaveCredit::where('employee_id', $monetization->employee_id)
+                ->where('leave_configuration_id', $monetization->leave_configuration_id)
+                ->where('year', $year)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$credit) {
+                return 'No leave credits found for this employee and year.';
+            }
+
+            $days = (float) ($monetization->approved_days ?? $monetization->days_monetized);
+
+            $credit->used_credits = max(0, (float) $credit->used_credits - $days);
+            $credit->last_updated = now();
+            $credit->save(); // saved hook carries the change into next year if initialized
+
+            $monetization->update([
+                'status'              => 'cancelled',
+                'cancellation_reason' => $validated['cancellation_reason'],
+                'cancelled_by'        => $request->user()->id,
+                'cancelled_at'        => now(),
+            ]);
+
+            $name = $monetization->employee
+                ? "{$monetization->employee->first_name} {$monetization->employee->surname}"
+                : "employee #{$monetization->employee_id}";
+
+            ActivityLog::create([
+                'user_id'      => $request->user()->id,
+                'action'       => 'leave_monetization.cancelled_approved',
+                'description'  => "Reversed approved monetization of {$days} day(s) for {$name} — {$days} day(s) restored. Reason: {$validated['cancellation_reason']}",
+                'subject_type' => 'LeaveMonetization',
+                'subject_id'   => $monetization->id,
+            ]);
+
+            return null;
+        });
+
+        if ($error) {
+            return response()->json(['message' => $error], 422);
+        }
+
+        return response()->json(['message' => 'Monetization reversed — credits restored']);
+    }
+
 
     public function reject(Request $request, $id)
     {

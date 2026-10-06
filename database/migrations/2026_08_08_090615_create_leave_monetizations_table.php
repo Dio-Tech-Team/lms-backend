@@ -18,6 +18,9 @@ return new class extends Migration
             $table->text('rejection_reason')->nullable();
             $table->enum('status', ['pending', 'approved', 'rejected', 'cancelled'])->default('pending');
             $table->index('status');
+            $table->text('cancellation_reason')->nullable();
+            $table->foreignId('cancelled_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('cancelled_at')->nullable();
             $table->foreignId('filed_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('applied_at')->nullable();
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->nullOnDelete();

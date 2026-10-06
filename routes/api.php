@@ -133,6 +133,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
         Route::post('leave-monetizations/{id}/approve', [LeaveMonetizationController::class, 'approve']);
         Route::post('leave-monetizations/{id}/reject', [LeaveMonetizationController::class, 'reject']);
+        Route::post('leave-monetizations/{id}/cancel-approved', [LeaveMonetizationController::class, 'cancelApproved']);
 
         Route::prefix('reports')->group(function () {
             Route::get('/employee-masterlist', [ReportController::class, 'employeeMasterlist']);
