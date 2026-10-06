@@ -165,6 +165,7 @@ class AttendanceController extends Controller
                         $computation = $this->computationService->computeMonthlyCredits([
                             'month'                       => $month,
                             'year'                        => $year,
+                            'employment_status'           => $employee->employment_status,
                             'absent_with_leave_days'      => $absentWithLeaveDays,
                             'absent_without_leave_days'   => $absentWithoutLeaveDays,
                             'late_am_minutes'             => $lateAm,
@@ -203,7 +204,8 @@ class AttendanceController extends Controller
                         $results[] = [
                             'sheet'              => $sheetName,
                             'employee'           => $employee->first_name . ' ' . $employee->surname,
-                            'lwop_days'          => $absentWithoutLeaveDays,
+                            // 'lwop_days'          => $absentWithoutLeaveDays,
+                            'lwop_days'          => $employee->employment_status === 'casual' ? $absentWithoutLeaveDays : 0,
                             'vl_earned'          => $computation['vl_earned'],
                             'sl_earned'          => $computation['sl_earned'],
                             'tardiness_deducted' => $computation['tardiness_equivalent_days'],

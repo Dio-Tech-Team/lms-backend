@@ -272,13 +272,27 @@ class LeaveCreditComputationService
         $absentWithoutLeave = $data['absent_without_leave_days'] ?? 0;
 
         // Step 3: Determine VL/SL Earned
-        if ($absentWithoutLeave > 0) {
-            // Scenario B: has LWOP, use Table III lookup
+        // if ($absentWithoutLeave > 0) {
+        //     // Scenario B: has LWOP, use Table III lookup
+        //     $daysPresentForCredit = $standardMonthDays - $absentWithoutLeave;
+        //     $vlEarned = $this->getLeaveCredit($daysPresentForCredit);
+        //     $slEarned = $this->getLeaveCredit($daysPresentForCredit);
+        // } else {
+        //     // Scenario A: no LWOP, flat rate
+        //     $vlEarned = 1.250;
+        //     $slEarned = 1.250;
+        // }
+
+        // Step 3: Determine VL/SL Earned
+        // Only casual employees have earning reduced by LWOP (agency rule).
+        // Permanent and elected employees always earn the full 1.250.
+        $isCasual = ($data['employment_status'] ?? null) === 'casual';
+
+        if ($isCasual && $absentWithoutLeave > 0) {
             $daysPresentForCredit = $standardMonthDays - $absentWithoutLeave;
             $vlEarned = $this->getLeaveCredit($daysPresentForCredit);
             $slEarned = $this->getLeaveCredit($daysPresentForCredit);
         } else {
-            // Scenario A: no LWOP, flat rate
             $vlEarned = 1.250;
             $slEarned = 1.250;
         }
