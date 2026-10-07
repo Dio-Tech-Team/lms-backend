@@ -154,6 +154,7 @@ class EmployeeController extends Controller
             'position' => 'required|string|exists:positions,title',
             'department_id'                    => 'required|exists:departments,id',
             'date_hired' => 'required|date|before_or_equal:today',
+            'schedule_type'                    => 'nullable|in:4day,5day',
         ]);
 
         // Authorization check before DB transaction
@@ -197,6 +198,7 @@ class EmployeeController extends Controller
                 'employment_status'                  => $request->employment_status,
                 'position'                           => $request->position,
                 'date_hired'                         => $request->date_hired,
+                'schedule_type'                      => $request->schedule_type ?? '4day',
             ]);
             EmploymentHistory::create([
                 'employee_id'                  => $employee->id,
@@ -273,6 +275,7 @@ class EmployeeController extends Controller
             'employees.employment_status',
             'employees.position',
             'employees.date_hired',
+            'employees.schedule_type',
             'employees.is_active',
             'users.username',
             'users.email',
@@ -334,6 +337,7 @@ class EmployeeController extends Controller
             'department_id'                  => $employee->department_id,
             'department'                     => $employee->department_name,
             'date_hired'                     => $employee->date_hired,
+            'schedule_type'                  => $employee->schedule_type,
             'employment_history'             => $employee->employment_history,
             'step_increment'                 => $stepIncrementInfo,
             'loyalty_pay'                    => $loyaltyPayInfo,
@@ -377,6 +381,7 @@ class EmployeeController extends Controller
             'department_id'                    => 'sometimes|exists:departments,id',
             'position' => 'sometimes|string|exists:positions,title',
             'date_hired' => 'sometimes|date|before_or_equal:today',
+            'schedule_type'                    => 'sometimes|in:4day,5day',
         ]);
 
 
@@ -719,7 +724,8 @@ class EmployeeController extends Controller
 
             $entries[] = [
                 'sort_date'   => $creditDate->copy()->endOfMonth(),
-                'period'      => $creditDate->format('m-d-y') . ' (' . $creditDate->format('M') . ')',
+                // 'period'      => $creditDate->format('m-d-y') . ' (' . $creditDate->format('M') . ')',
+                'period'      => $creditDate->copy()->endOfMonth()->format('m-d-y') . ' (' . $creditDate->format('M') . ')',
                 // 'particulars' => 'Monthly credit',
                 'particulars' => $this->monthlyParticulars($row, $type),
                 'earned'      => round($earned, 3),
@@ -756,7 +762,8 @@ class EmployeeController extends Controller
                     'earned'      => 0,
                     'abs_wp'      => round($withPay, 3),
                     'abs_wop'     => round((float) $rec->no_pay_days, 3),
-                    'used'        => round($withPay, 3),
+                    // W/P shows days; USED shows credits actually deducted
+                    'used'        => round($withPay * (float) ($rec->credit_factor ?? 1), 3),
                 ];
             }
             // Personal slips deduct VL only

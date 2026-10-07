@@ -43,6 +43,7 @@ return new class extends Migration
 
             // Employment Information
             $table->enum('employment_status', ['permanent', 'casual', 'elected', 'job_order', 'resigned', 'retired']);
+            $table->enum('schedule_type', ['4day', '5day'])->default('4day');
             $table->enum('retirement_type', ['mandatory', 'optional'])->nullable();
             $table->string('position');
             $table->date('date_hired');

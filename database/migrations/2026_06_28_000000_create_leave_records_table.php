@@ -22,6 +22,7 @@ return new class extends Migration
             $table->date('end_date');
             $table->decimal('days_taken', 8, 3);
             $table->decimal('no_pay_days', 8, 3)->default(0);
+            $table->decimal('credit_factor', 4, 2)->default(1.00); // credits deducted per leave day
             $table->text('remarks')->nullable();
             $table->timestamps();
         });

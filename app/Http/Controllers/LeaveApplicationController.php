@@ -47,6 +47,7 @@ class LeaveApplicationController extends Controller
             'leave_applications.original_days_applied',
             'employees.first_name',
             'employees.surname',
+            'employees.schedule_type',
             'departments.name as department_name',
             'leave_configurations.name as leave_type_name',
             'leave_configurations.code as leave_type_code',
@@ -126,28 +127,21 @@ class LeaveApplicationController extends Controller
             'is_paper_submission'    => 'nullable|boolean',
         ]);
 
-        // // Backend is the source of truth for days_applied — ignore whatever the client sent
-        // $validated['days_applied'] = $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
+
+        $config = LeaveConfiguration::findOrFail($request->leave_configuration_id);
+
+        // if ($config->grant_type === 'event_manual') {
+        //     $validated['days_applied'] = Carbon::parse($validated['start_date'])
+        //         ->diffInDays(Carbon::parse($validated['end_date'])) + 1;
+        // } else {
+        //     $validated['days_applied'] = $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
+        // }
 
         // if ($validated['days_applied'] < 0.5) {
         //     return response()->json([
         //         'message' => 'The selected date range contains no working days.'
         //     ], 422);
         // }
-        $config = LeaveConfiguration::findOrFail($request->leave_configuration_id);
-
-        if ($config->grant_type === 'event_manual') {
-            $validated['days_applied'] = Carbon::parse($validated['start_date'])
-                ->diffInDays(Carbon::parse($validated['end_date'])) + 1;
-        } else {
-            $validated['days_applied'] = $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
-        }
-
-        if ($validated['days_applied'] < 0.5) {
-            return response()->json([
-                'message' => 'The selected date range contains no working days.'
-            ], 422);
-        }
 
         $user = $request->user();
 
@@ -173,6 +167,20 @@ class LeaveApplicationController extends Controller
                 'message' => 'Target employee profile could not be determined.'
             ], 422);
         }
+
+
+        $validated['days_applied'] = $config->grant_type === 'event_manual'
+            ? Carbon::parse($validated['start_date'])->diffInDays(Carbon::parse($validated['end_date'])) + 1
+            : $this->calculateWorkingDays($validated['start_date'], $validated['end_date'], $employee->schedule_type);
+
+        if ($validated['days_applied'] < 0.5) {
+            return response()->json([
+                'message' => 'The selected date range contains no working days.'
+            ], 422);
+        }
+
+        $factor  = $this->creditFactor($employee, $config->code); // FL stays 1:1
+        $credits = round($validated['days_applied'] * $factor, 3);
 
         if ($employee->employment_status === 'job_order' && $config->code !== 'WL') {
             return response()->json([
@@ -233,7 +241,8 @@ class LeaveApplicationController extends Controller
         }
 
         // Calculate balance status once
-        $hasInsufficientBalance = $credit ? ($credit->remaining_balance < $validated['days_applied']) : false;
+        // $hasInsufficientBalance = $credit ? ($credit->remaining_balance < $validated['days_applied']) : false;
+        $hasInsufficientBalance = $credit ? ($credit->remaining_balance < $credits) : false;
         $eligibilityError = $this->validateLeaveEligibility($config, $employee);
         if ($eligibilityError) {
             return response()->json(['message' => $eligibilityError], 422);
@@ -266,8 +275,7 @@ class LeaveApplicationController extends Controller
                 ->where('employee_id', $employee->id)
                 ->where('year', $year)
                 ->first();
-
-            if (!$vlCredit || $vlCredit->remaining_balance < $validated['days_applied']) {
+            if (!$vlCredit || $vlCredit->remaining_balance < $credits) {
                 return response()->json([
                     'message' => 'Insufficient Vacation Leave balance to cover this Forced Leave application.'
                 ], 422);
@@ -291,7 +299,7 @@ class LeaveApplicationController extends Controller
 
 
         if ($request->boolean('is_paper_submission') || $isAdminFiling) {
-            $application = DB::transaction(function () use ($employee, $validated,  $deductionCredit, $request, $config) {
+            $application = DB::transaction(function () use ($employee, $validated,  $deductionCredit, $request, $config, $credits, $factor) {
                 $app = LeaveApplication::create([
                     'employee_id'            => $employee->id,
                     'leave_configuration_id' => $validated['leave_configuration_id'],
@@ -305,7 +313,9 @@ class LeaveApplicationController extends Controller
                     'reviewed_by'            => $request->user()->id,
                     'filed_by'               => $request->user()->id,
                 ]);
-                $noPayDays = $deductionCredit ? $deductionCredit->deductLeave((float) $validated['days_applied']) : (float) $validated['days_applied'];
+                // Deduct in credits; report any shortfall back in days for LWOP
+                $noPayCredits = $deductionCredit ? $deductionCredit->deductLeave($credits) : $credits;
+                $noPayDays    = round($noPayCredits / $factor, 3);
 
                 LeaveRecord::create([
                     'employee_id'            => $employee->id,
@@ -316,6 +326,7 @@ class LeaveApplicationController extends Controller
                     'end_date'               => $validated['end_date'],
                     'days_taken'             => $validated['days_applied'],
                     'no_pay_days'            => $noPayDays,
+                    'credit_factor'          => $factor,
                     'remarks'                => ($noPayDays > 0 ? "{$noPayDays} day(s) LWOP. " : '') . 'Paper Submission Backup ID: ' . $app->id,
                 ]);
 
@@ -348,6 +359,51 @@ class LeaveApplicationController extends Controller
      * Deliberately mirrors store()/approve() rather than re-deriving —
      * a preview that disagrees with the deduction is worse than none.
      */
+    // public function preview(Request $request)
+    // {
+    //     $validated = $request->validate([
+    //         'employee_id'            => 'required|exists:employees,id',
+    //         'leave_configuration_id' => 'required|exists:leave_configurations,id',
+    //         'start_date'             => 'required|date',
+    //         'end_date'               => 'required|date|after_or_equal:start_date',
+    //     ]);
+
+    //     $config = LeaveConfiguration::findOrFail($validated['leave_configuration_id']);
+
+    //     // event_manual types count calendar days; annual_auto skip weekends + holidays
+    //     $days = $config->grant_type === 'event_manual'
+    //         ? Carbon::parse($validated['start_date'])->diffInDays(Carbon::parse($validated['end_date'])) + 1
+    //         : $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
+
+    //     $year = Carbon::parse($validated['start_date'])->year;
+
+    //     // Forced Leave draws from Vacation Leave, not from its own placeholder row
+    //     $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
+
+    //     $credit = LeaveCredit::where('employee_id', $validated['employee_id'])
+    //         ->whereHas('leaveConfiguration', fn($q) => $q->where('code', $targetCode))
+    //         ->where('year', $year)
+    //         ->first();
+
+    //     $balance   = $credit ? (float) $credit->remaining_balance : null;
+    //     $shortfall = ($balance !== null && $days > $balance) ? round($days - $balance, 3) : 0;
+
+    //     // Only VL/SL fall through to LWOP; the rest are hard-blocked at store()
+    //     $hardBlocked = in_array($config->code, ['WL', 'SPL', 'SOL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'], true);
+
+    //     return response()->json([
+    //         'days_applied'      => $days,
+    //         'counting'          => $config->grant_type === 'event_manual' ? 'calendar' : 'working',
+    //         'target_code'       => $targetCode,
+    //         'remaining_balance' => $balance,
+    //         'balance_after'     => $balance === null ? null : round(max(0, $balance - $days), 3),
+    //         'shortfall'         => $shortfall,
+    //         'will_be_lwop'      => !$hardBlocked && $shortfall > 0,
+    //         'hard_blocked'      => $hardBlocked && $shortfall > 0,
+    //         'has_credit_row'    => (bool) $credit,
+    //     ]);
+    // }
+
     public function preview(Request $request)
     {
         $validated = $request->validate([
@@ -357,41 +413,125 @@ class LeaveApplicationController extends Controller
             'end_date'               => 'required|date|after_or_equal:start_date',
         ]);
 
-        $config = LeaveConfiguration::findOrFail($validated['leave_configuration_id']);
+        $config   = LeaveConfiguration::findOrFail($validated['leave_configuration_id']);
+        $employee = Employee::findOrFail($validated['employee_id']);
 
-        // event_manual types count calendar days; annual_auto skip weekends + holidays
+        // event_manual types count calendar days; the rest count the employee's workdays
         $days = $config->grant_type === 'event_manual'
             ? Carbon::parse($validated['start_date'])->diffInDays(Carbon::parse($validated['end_date'])) + 1
-            : $this->calculateWorkingDays($validated['start_date'], $validated['end_date']);
+            : $this->calculateWorkingDays($validated['start_date'], $validated['end_date'], $employee->schedule_type);
 
         $year = Carbon::parse($validated['start_date'])->year;
 
         // Forced Leave draws from Vacation Leave, not from its own placeholder row
         $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
+        $factor     = $this->creditFactor($employee, $config->code); // FL stays 1:1
+        $credits    = round($days * $factor, 3);
 
-        $credit = LeaveCredit::where('employee_id', $validated['employee_id'])
+        $credit = LeaveCredit::where('employee_id', $employee->id)
             ->whereHas('leaveConfiguration', fn($q) => $q->where('code', $targetCode))
             ->where('year', $year)
             ->first();
 
-        $balance   = $credit ? (float) $credit->remaining_balance : null;
-        $shortfall = ($balance !== null && $days > $balance) ? round($days - $balance, 3) : 0;
+        $balance          = $credit ? (float) $credit->remaining_balance : null;
+        $shortfallCredits = ($balance !== null && $credits > $balance) ? round($credits - $balance, 3) : 0;
 
         // Only VL/SL fall through to LWOP; the rest are hard-blocked at store()
         $hardBlocked = in_array($config->code, ['WL', 'SPL', 'SOL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'], true);
 
         return response()->json([
             'days_applied'      => $days,
+            'credit_factor'     => $factor,
+            'credits'           => $credits,
             'counting'          => $config->grant_type === 'event_manual' ? 'calendar' : 'working',
             'target_code'       => $targetCode,
             'remaining_balance' => $balance,
-            'balance_after'     => $balance === null ? null : round(max(0, $balance - $days), 3),
-            'shortfall'         => $shortfall,
-            'will_be_lwop'      => !$hardBlocked && $shortfall > 0,
-            'hard_blocked'      => $hardBlocked && $shortfall > 0,
+            'balance_after'     => $balance === null ? null : round(max(0, $balance - $credits), 3),
+            'shortfall'         => round($shortfallCredits / $factor, 3), // in days, same meaning as before
+            'shortfall_credits' => $shortfallCredits,
+            'will_be_lwop'      => !$hardBlocked && $shortfallCredits > 0,
+            'hard_blocked'      => $hardBlocked && $shortfallCredits > 0,
             'has_credit_row'    => (bool) $credit,
         ]);
     }
+    // public function approve(Request $request, $id)
+    // {
+    //     $application = LeaveApplication::findOrFail($id);
+    //     $config = LeaveConfiguration::find($application->leave_configuration_id);
+
+    //     if ($application->status !== 'pending') {
+    //         return response()->json(['message' => 'Application is already ' . $application->status], 400);
+    //     }
+
+    //     // If it's Force Leave, we need the VL credit record, not the FL record.
+    //     $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
+
+    //     $year = Carbon::parse($application->start_date)->year;
+
+    //     $result = DB::transaction(function () use ($application, $request, $config, $targetCode, $year) {
+    //         $credit = LeaveCredit::where('employee_id', $application->employee_id)
+    //             ->whereHas('leaveConfiguration', function ($query) use ($targetCode) {
+    //                 $query->where('code', $targetCode);
+    //             })
+    //             ->where('year', $year)
+    //             ->lockForUpdate()
+    //             ->first();
+
+    //         // $correctDays = $this->calculateWorkingDays($application->start_date, $application->end_date);
+    //         $correctDays = ($config->code && $config->grant_type === 'event_manual')
+    //             ? Carbon::parse($application->start_date)->diffInDays(Carbon::parse($application->end_date)) + 1
+    //             : $this->calculateWorkingDays($application->start_date, $application->end_date);
+
+    //         // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
+    //         if (in_array($config->code, ['WL', 'SPL', 'SOL', 'FL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'])) {
+    //             // if (!$credit || $credit->remaining_balance < $application->days_applied) {
+    //             if (!$credit || $credit->remaining_balance < $correctDays) {
+    //                 return ['error' => 'Insufficient balance for ' . $config->name];
+    //             }
+    //         }
+    //         $application->update([
+    //             'status'       => 'approved',
+    //             'days_applied' => $correctDays,
+    //             'reviewed_by'  => $request->user()->id,
+    //             'reviewed_at'  => now(),
+    //         ]);
+
+    //         // $noPayDays = $credit ? $credit->deductLeave((float) $application->days_applied) : (float) $application->days_applied;
+    //         $noPayDays = $credit ? $credit->deductLeave($correctDays) : $correctDays;
+
+    //         LeaveRecord::create([
+    //             'employee_id'            => $application->employee_id,
+    //             'leave_configuration_id' => $application->leave_configuration_id,
+    //             'leave_application_id'   => $application->id,
+    //             'recorded_by'            => $request->user()->id,
+    //             'start_date'             => $application->start_date,
+    //             'end_date'               => $application->end_date,
+    //             'days_taken'             => $correctDays,
+    //             // 'days_taken'             => $application->days_applied,
+    //             'no_pay_days'            => $noPayDays,
+    //             'remarks'                => $noPayDays > 0
+    //                 ? "Approved. {$noPayDays} day(s) Leave Without Pay."
+    //                 : 'Approved. Balance deducted.',
+    //         ]);
+
+    //         ActivityLog::create([
+    //             'user_id'      => $request->user()->id,
+    //             'action'       => 'leave_application.approved',
+    //             'description'  => "Approved leave application #{$application->id} ({$config->name})",
+    //             'subject_type' => 'LeaveApplication',
+    //             'subject_id'   => $application->id,
+    //         ]);
+
+    //         return ['error' => null];
+    //     });
+
+    //     if ($result['error']) {
+    //         return response()->json(['message' => $result['error']], 422);
+    //     }
+
+    //     return response()->json(['message' => 'Leave application approved successfully']);
+    // }
+
     public function approve(Request $request, $id)
     {
         $application = LeaveApplication::findOrFail($id);
@@ -401,12 +541,15 @@ class LeaveApplicationController extends Controller
             return response()->json(['message' => 'Application is already ' . $application->status], 400);
         }
 
+        $employee = Employee::findOrFail($application->employee_id);
+
         // If it's Force Leave, we need the VL credit record, not the FL record.
         $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;
+        $factor     = $this->creditFactor($employee, $config->code); // FL stays 1:1
 
         $year = Carbon::parse($application->start_date)->year;
 
-        $result = DB::transaction(function () use ($application, $request, $config, $targetCode, $year) {
+        $result = DB::transaction(function () use ($application, $request, $config, $targetCode, $year, $employee, $factor) {
             $credit = LeaveCredit::where('employee_id', $application->employee_id)
                 ->whereHas('leaveConfiguration', function ($query) use ($targetCode) {
                     $query->where('code', $targetCode);
@@ -415,18 +558,19 @@ class LeaveApplicationController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            // $correctDays = $this->calculateWorkingDays($application->start_date, $application->end_date);
-            $correctDays = ($config->code && $config->grant_type === 'event_manual')
+            $correctDays = $config->grant_type === 'event_manual'
                 ? Carbon::parse($application->start_date)->diffInDays(Carbon::parse($application->end_date)) + 1
-                : $this->calculateWorkingDays($application->start_date, $application->end_date);
+                : $this->calculateWorkingDays($application->start_date, $application->end_date, $employee->schedule_type);
+
+            $credits = round($correctDays * $factor, 3);
 
             // 1. STRICT VALIDATION: Block if Wellness, SPL, or Force Leave balance is insufficient
             if (in_array($config->code, ['WL', 'SPL', 'SOL', 'FL', 'ML', 'PTL', 'VAWC', 'RHL', 'SLB', 'STL', 'ADL', 'CAL'])) {
-                // if (!$credit || $credit->remaining_balance < $application->days_applied) {
-                if (!$credit || $credit->remaining_balance < $correctDays) {
+                if (!$credit || $credit->remaining_balance < $credits) {
                     return ['error' => 'Insufficient balance for ' . $config->name];
                 }
             }
+
             $application->update([
                 'status'       => 'approved',
                 'days_applied' => $correctDays,
@@ -434,8 +578,9 @@ class LeaveApplicationController extends Controller
                 'reviewed_at'  => now(),
             ]);
 
-            // $noPayDays = $credit ? $credit->deductLeave((float) $application->days_applied) : (float) $application->days_applied;
-            $noPayDays = $credit ? $credit->deductLeave($correctDays) : $correctDays;
+            // Deduct in credits; report any shortfall back in days for LWOP
+            $noPayCredits = $credit ? $credit->deductLeave($credits) : $credits;
+            $noPayDays    = round($noPayCredits / $factor, 3);
 
             LeaveRecord::create([
                 'employee_id'            => $application->employee_id,
@@ -445,8 +590,8 @@ class LeaveApplicationController extends Controller
                 'start_date'             => $application->start_date,
                 'end_date'               => $application->end_date,
                 'days_taken'             => $correctDays,
-                // 'days_taken'             => $application->days_applied,
                 'no_pay_days'            => $noPayDays,
+                'credit_factor'          => $factor,
                 'remarks'                => $noPayDays > 0
                     ? "Approved. {$noPayDays} day(s) Leave Without Pay."
                     : 'Approved. Balance deducted.',
@@ -455,7 +600,7 @@ class LeaveApplicationController extends Controller
             ActivityLog::create([
                 'user_id'      => $request->user()->id,
                 'action'       => 'leave_application.approved',
-                'description'  => "Approved leave application #{$application->id} ({$config->name})",
+                'description'  => "Approved leave application #{$application->id} ({$config->name}) — {$correctDays} day(s), {$credits} credit(s)",
                 'subject_type' => 'LeaveApplication',
                 'subject_id'   => $application->id,
             ]);
@@ -564,7 +709,7 @@ class LeaveApplicationController extends Controller
             'dry_run'        => 'nullable|boolean',
         ]);
 
-        $application = LeaveApplication::with('leaveConfiguration')->findOrFail($id);
+        $application = LeaveApplication::with(['leaveConfiguration', 'employee'])->findOrFail($id);
         $config = $application->leaveConfiguration;
 
         if ($application->status !== 'approved') {
@@ -601,7 +746,7 @@ class LeaveApplicationController extends Controller
             // Same counting rule approve() used
             $daysUsed = $config->grant_type === 'event_manual'
                 ? $start->diffInDays($lastDay) + 1
-                : $this->calculateWorkingDays($start->toDateString(), $lastDay->toDateString());
+                : $this->calculateWorkingDays($start->toDateString(), $lastDay->toDateString(), $application->employee?->schedule_type);
         }
 
         $refundDays = round((float) $application->days_applied - $daysUsed, 3);
@@ -616,7 +761,7 @@ class LeaveApplicationController extends Controller
             $record = LeaveRecord::where('leave_application_id', $application->id)->first();
             $noPay  = (float) ($record->no_pay_days ?? 0);
             $lwopRemoved     = min($noPay, $refundDays);
-            $creditsReturned = round($refundDays - $lwopRemoved, 3);
+            $creditsReturned = round(($refundDays - $lwopRemoved) * (float) ($record->credit_factor ?? 1), 3);
 
             return response()->json([
                 'full_cancel'      => $daysUsed == 0,
@@ -666,7 +811,8 @@ class LeaveApplicationController extends Controller
                     ->first();
 
                 if ($credit) {
-                    $credit->used_credits = max(0, (float) $credit->used_credits - $creditRefund);
+                    // Refund at the rate it was deducted, not the employee's current schedule
+                    $credit->used_credits = max(0, (float) $credit->used_credits - $creditRefund * (float) ($record->credit_factor ?? 1));
                     $credit->last_updated = now();
                     $credit->save(); // recomputes remaining_balance + carry-over sync
                 }
@@ -755,15 +901,24 @@ class LeaveApplicationController extends Controller
         return response()->json($application);
     }
 
-
     // private function calculateWorkingDays(string $startDate, string $endDate): float
     // {
     //     $start = Carbon::parse($startDate);
     //     $end = Carbon::parse($endDate);
 
-    //     $holidayDates = Holiday::whereBetween('date', [$start->toDateString(), $end->toDateString()])
+    //     // One-time holidays match on the full date. Recurring ones match on
+    //     // month and day only — otherwise a holiday entered for 2026 would
+    //     // stop applying in 2027 and HR would have to re-enter the whole
+    //     // list every January.
+    //     $fixedDates = Holiday::where('is_recurring', false)
+    //         ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
     //         ->pluck('date')
-    //         ->map(fn($d) => $d->toDateString())
+    //         ->map(fn($d) => Carbon::parse($d)->toDateString())
+    //         ->toArray();
+
+    //     $recurringMonthDays = Holiday::where('is_recurring', true)
+    //         ->pluck('date')
+    //         ->map(fn($d) => Carbon::parse($d)->format('m-d'))
     //         ->toArray();
 
     //     // Only Monday–Thursday are working days for this agency
@@ -779,7 +934,8 @@ class LeaveApplicationController extends Controller
 
     //     while ($current->lte($end)) {
     //         $isWorkingDayOfWeek = in_array($current->dayOfWeek, $workingDaysOfWeek);
-    //         $isHoliday = in_array($current->toDateString(), $holidayDates);
+    //         $isHoliday = in_array($current->toDateString(), $fixedDates)
+    //             || in_array($current->format('m-d'), $recurringMonthDays);
 
     //         if ($isWorkingDayOfWeek && !$isHoliday) {
     //             $count++;
@@ -790,15 +946,14 @@ class LeaveApplicationController extends Controller
 
     //     return $count;
     // }
-    private function calculateWorkingDays(string $startDate, string $endDate): float
+
+    private function calculateWorkingDays(string $startDate, string $endDate, ?string $scheduleType = '4day'): float
     {
         $start = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
 
         // One-time holidays match on the full date. Recurring ones match on
-        // month and day only — otherwise a holiday entered for 2026 would
-        // stop applying in 2027 and HR would have to re-enter the whole
-        // list every January.
+        // month and day only, so they carry over to every year.
         $fixedDates = Holiday::where('is_recurring', false)
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->pluck('date')
@@ -810,13 +965,11 @@ class LeaveApplicationController extends Controller
             ->map(fn($d) => Carbon::parse($d)->format('m-d'))
             ->toArray();
 
-        // Only Monday–Thursday are working days for this agency
-        $workingDaysOfWeek = [
-            Carbon::MONDAY,
-            Carbon::TUESDAY,
-            Carbon::WEDNESDAY,
-            Carbon::THURSDAY,
-        ];
+        // 4-day schedule: Mon–Thu. 5-day schedule: Mon–Fri.
+        $workingDaysOfWeek = [Carbon::MONDAY, Carbon::TUESDAY, Carbon::WEDNESDAY, Carbon::THURSDAY];
+        if ($scheduleType === '5day') {
+            $workingDaysOfWeek[] = Carbon::FRIDAY;
+        }
 
         $count = 0;
         $current = $start->copy();
@@ -835,6 +988,20 @@ class LeaveApplicationController extends Controller
 
         return $count;
     }
+
+    /**
+     * Credits deducted per leave day. Only VL and SL scale with the work
+     * schedule. Forced Leave and special leaves are fixed 1:1.
+     */
+    private function creditFactor(Employee $employee, string $targetCode): float
+    {
+        if (!in_array($targetCode, ['VL', 'SL'], true)) {
+            return 1.0;
+        }
+
+        return $employee->schedule_type === '5day' ? 1.0 : 1.25;
+    }
+
     public function generatePdf(Request $request, $id)
     {
         $application = LeaveApplication::with([
@@ -896,17 +1063,24 @@ class LeaveApplicationController extends Controller
 
         $days = (float) $application->days_applied;
 
+        // Pending: not deducted yet, so use the employee's current rate.
+        // Approved: use the rate stored when it was approved.
+        $factor = ($application->status === 'approved' && $leaveRecord)
+            ? (float) ($leaveRecord->credit_factor ?? 1)
+            : $this->creditFactor($application->employee, $code);
+
         if ($application->status === 'pending') {
             // Not deducted yet — project the deduction onto the balance row.
+            $projected = $days * $factor;
             if ($code === 'VL' || $code === 'FL') {
-                $vlBalance = max(0, $vlBalance - $days);
+                $vlBalance = max(0, $vlBalance - $projected);
             } elseif ($code === 'SL') {
-                $slBalance = max(0, $slBalance - $days);
+                $slBalance = max(0, $slBalance - $projected);
             }
         } elseif ($application->status === 'approved') {
             // Already deducted — add back only what the balance actually
             // absorbed, since LWOP days never touched it.
-            $absorbed = $days - (float) ($leaveRecord->no_pay_days ?? 0);
+            $absorbed = ($days - (float) ($leaveRecord->no_pay_days ?? 0)) * $factor;
             if ($code === 'VL' || $code === 'FL') {
                 $vlTotal += $absorbed;
             } elseif ($code === 'SL') {

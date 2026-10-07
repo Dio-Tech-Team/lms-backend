@@ -21,6 +21,7 @@ class LeaveRecord extends Model
         'end_date',
         'days_taken',
         'no_pay_days',
+        'credit_factor',
         'remarks',
     ];
 
@@ -57,7 +58,8 @@ class LeaveRecord extends Model
 
             if (!$nextVl) return;
 
-            $nextVl->total_credits = (float) $nextVl->total_credits + (float) $record->days_taken;
+            $nextVl->total_credits = (float) $nextVl->total_credits
+                + (float) $record->days_taken * (float) ($record->credit_factor ?? 1);
             $nextVl->save();
         });
     }

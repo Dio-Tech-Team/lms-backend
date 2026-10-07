@@ -32,6 +32,7 @@ class Employee extends Model
         'psn_number',
         'tin_number',
         'employment_status',
+        'schedule_type',
         'retirement_type',
         'position',
         'date_hired',
