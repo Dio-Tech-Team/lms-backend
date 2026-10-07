@@ -82,9 +82,11 @@ class EmployeeController extends Controller
                 ? $query->whereIn('employees.id', $onLeaveIds)
                 : $query->whereNotIn('employees.id', $onLeaveIds);
         }
-
-        $employees = $query->paginate(10);
-
+        $employees = $query
+            ->orderByDesc('employees.is_active')
+            ->orderBy('employees.surname')
+            ->orderBy('employees.first_name')
+            ->paginate(10);
 
         // Tag each employee in the paginated collection
         $employees->getCollection()->transform(function ($employee) use ($onLeaveIds) {
