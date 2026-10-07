@@ -503,7 +503,8 @@ class AttendanceController extends Controller
         return response()->json(['data' => $rows]);
     }
 
-    public function reverseMonth(Request $request){
+    public function reverseMonth(Request $request)
+    {
         $request->validate([
             'month' => 'required|integer|min:1|max:12',
             'year'  => 'required|integer',
