@@ -42,70 +42,70 @@ class UserSeeder extends Seeder
             ]
 
         );
-        $employees = [
-            ['Sammy', 'Cruz'],
-            ['Althea', 'De Leon'],
-            ['Jhonny', 'Aquino'],
-            ['Carmela', 'Manzano'],
-            ['Danilo', 'Espiritu'],
+        // $employees = [
+        //     ['Sammy', 'Cruz'],
+        //     ['Althea', 'De Leon'],
+        //     ['Jhonny', 'Aquino'],
+        //     ['Carmela', 'Manzano'],
+        //     ['Danilo', 'Espiritu'],
 
-            ['Maria', 'Bautista'],
-            ['Ramon', 'Perez'],
-            ['Rowena', 'Dela Cruz'],
-            ['Eduardo', 'Panganiban'],
-            ['Angelita', 'Dizon'],
-            ['Jose', 'Ocampo'],
-            ['Carmela', 'Tolentino'],
-            ['Danilo', 'Ramos'],
-            ['Rowelson', 'Garcia'],
-            ['Eduardo', 'Manalili'],
+        //     ['Maria', 'Bautista'],
+        //     ['Ramon', 'Perez'],
+        //     ['Rowena', 'Dela Cruz'],
+        //     ['Eduardo', 'Panganiban'],
+        //     ['Angelita', 'Dizon'],
+        //     ['Jose', 'Ocampo'],
+        //     ['Carmela', 'Tolentino'],
+        //     ['Danilo', 'Ramos'],
+        //     ['Rowelson', 'Garcia'],
+        //     ['Eduardo', 'Manalili'],
 
-            ['Catherine', 'Manzano'],
-            ['Kenedy', 'Quilang'],
-            ['Reynaldo', 'Tomas'],
-            ['Jhon', 'Farillon'],
-            ['Mitz', 'Ignacio'],
+        //     ['Catherine', 'Manzano'],
+        //     ['Kenedy', 'Quilang'],
+        //     ['Reynaldo', 'Tomas'],
+        //     ['Jhon', 'Farillon'],
+        //     ['Mitz', 'Ignacio'],
 
-            ['Shane Paolo', 'Valdez'],
-            ['Jilmar', 'Ferrer'],
-            ['Jamby', 'Villarta'],
-            ['Rolando', 'Gonzales'],
-            ['Arnel', 'Mercado'],
+        //     ['Shane Paolo', 'Valdez'],
+        //     ['Jilmar', 'Ferrer'],
+        //     ['Jamby', 'Villarta'],
+        //     ['Rolando', 'Gonzales'],
+        //     ['Arnel', 'Mercado'],
 
-            ['Jen', 'Tuquib'],
-            ['Jhon', 'Reyes'],
-            ['Jayson', 'Espiritu'],
-            ['Joy', 'Dizon'],
-            ['Sam', 'Blanza'],
-            ['Nick', 'Pascual'],
+        //     ['Jen', 'Tuquib'],
+        //     ['Jhon', 'Reyes'],
+        //     ['Jayson', 'Espiritu'],
+        //     ['Joy', 'Dizon'],
+        //     ['Sam', 'Blanza'],
+        //     ['Nick', 'Pascual'],
 
-            ['Leonardo', 'Meneses'],
-            ['Mark', 'Soriano'],
-            ['Mark', 'Rama'],
-            ['Kiel', 'Ramon'],
-        ];
+        //     ['Leonardo', 'Meneses'],
+        //     ['Mark', 'Soriano'],
+        //     ['Mark', 'Rama'],
+        //     ['Kiel', 'Ramon'],
+        // ];
 
-        foreach ($employees as $employee) {
+        // foreach ($employees as $employee) {
 
-            $username = strtolower(
-                str_replace(' ', '', $employee[0] . $employee[1])
-            );
+        //     $username = strtolower(
+        //         str_replace(' ', '', $employee[0] . $employee[1])
+        //     );
 
-            // User::create([
-            //     'username' => $username,
-            //     'email' => $username . '@gmail.com',
-            //     'password' => Hash::make('@Password123'),
-            //     'role' => 'employee'
-            // ]);
-            User::updateOrCreate(
-                ['username' => $username],
-                [
-                    'email' => $username . '@example.com',
-                    'password' => Hash::make('@Password123'),
-                    'role' => 'employee',
-                    'must_change_password' => true,
-                ]
-            );
-        }
+        //     // User::create([
+        //     //     'username' => $username,
+        //     //     'email' => $username . '@gmail.com',
+        //     //     'password' => Hash::make('@Password123'),
+        //     //     'role' => 'employee'
+        //     // ]);
+        //     User::updateOrCreate(
+        //         ['username' => $username],
+        //         [
+        //             'email' => $username . '@example.com',
+        //             'password' => Hash::make('@Password123'),
+        //             'role' => 'employee',
+        //             'must_change_password' => true,
+        //         ]
+        //     );
+        // }
     }
 }
