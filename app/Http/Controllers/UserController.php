@@ -33,16 +33,17 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'username' => ['required', 'string', 'unique:users,username'],
-            'email'    => ['required', 'email', 'unique:users,email'],
+            'email'    => ['nullable', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8'],
             'role'     => ['required', Rule::in(['super_admin', 'hr_admin'])],
         ]);
 
         $user = User::create([
             'username' => $validated['username'],
-            'email'    => $validated['email'],
+            'email'    => $validated['email'] ?? null,
             'password' => Hash::make($validated['password']),
             'role'     => $validated['role'],
+            'must_change_password' => true,
         ]);
 
         return response()->json([
