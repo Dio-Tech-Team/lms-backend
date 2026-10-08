@@ -5,30 +5,49 @@
     <meta charset="utf-8">
     <title>Application for Leave</title>
     <style>
-        /* Philippine "Long"/"Legal" bond paper = 8.5in x 13in (NOT US Legal, which is 8.5x14) */
+        /* Philippine "Long" bond paper = 8.5in x 13in (NOT US Legal, which is 8.5x14) */
         @page {
             size: 8.5in 13in;
-            margin: 0.5in 0.6in;
+            margin: 0.45in 0.55in;
         }
 
         body {
             font-family: Arial, sans-serif;
-            font-size: 10px;
+            font-size: 12px;
+            line-height: 1.3;
         }
 
-        .header-container {
-            display: table;
+        .form-id {
+            font-size: 9px;
+            font-weight: bold;
+            font-style: italic;
+            line-height: 1.2;
+        }
+
+        table.header {
             width: 100%;
-            margin-bottom: 6px;
+            border-collapse: collapse;
+            margin-top: 4px;
         }
 
-        .header-text {
+        table.header td {
+            vertical-align: middle;
+            border: none;
+            padding: 0;
+        }
+
+        .header-lines {
             text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            line-height: 1.25;
         }
 
-        .header-text h4,
-        .header-text h2 {
-            margin: 2px 0;
+        .form-title {
+            text-align: center;
+            font-weight: bold;
+            font-size: 17px;
+            margin: 8px 0 8px;
         }
 
         table.main {
@@ -39,19 +58,26 @@
 
         table.main td {
             border: 1px solid #000;
-            padding: 6px;
+            padding: 7px 8px;
             vertical-align: top;
+        }
+
+        .section-title {
+            font-weight: bold;
+            text-align: center;
+            font-size: 12.5px;
         }
 
         .checkbox {
             display: inline-block;
-            width: 9px;
-            height: 9px;
+            width: 10px;
+            height: 10px;
             border: 1px solid #000;
             margin-right: 4px;
             text-align: center;
-            line-height: 9px;
+            line-height: 10px;
             font-size: 9px;
+            vertical-align: middle;
         }
 
         .checked {
@@ -59,26 +85,71 @@
             color: #fff;
         }
 
-        .section-title {
-            font-weight: bold;
-            background-color: #e8e8e8;
-            text-align: center;
-            padding: 5px;
+        .leave-item {
+            margin-bottom: 3px;
+        }
+
+        .cite {
+            font-size: 7.5px;
         }
 
         .small-text {
-            font-size: 8px;
-        }
-
-        .underline {
-            border-bottom: 1px solid #000;
+            font-size: 9px;
         }
 
         .center {
             text-align: center;
         }
 
-        /* Back page (Instructions) */
+        /* Value written on a blank, e.g. "__1__ days with pay" */
+        .fill {
+            display: inline-block;
+            min-width: 55px;
+            border-bottom: 1px solid #000;
+            text-align: center;
+        }
+
+        .blank-line {
+            border-bottom: 1px solid #000;
+            height: 17px;
+        }
+
+        /* Signature block: name on the line, label below */
+        .sig-line {
+            border-bottom: 1px solid #000;
+            margin: 18px 25px 0;
+            text-align: center;
+            font-weight: bold;
+            min-height: 15px;
+        }
+
+        .sig-label {
+            text-align: center;
+            font-size: 10px;
+        }
+
+        table.credits {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 4px;
+        }
+
+        table.credits td {
+            border: 1px solid #000;
+            padding: 4px 6px;
+        }
+
+        table.credits td.label {
+            font-style: italic;
+            font-weight: bold;
+            width: 38%;
+        }
+
+        table.credits td.num {
+            text-align: center;
+        }
+
+        /* ============ Back page (Instructions) ============ */
         .back-page {
             page-break-before: always;
         }
@@ -87,33 +158,30 @@
             font-weight: bold;
             text-align: center;
             font-size: 13px;
-            border: 1px solid #000;
-            padding: 6px;
+            padding: 4px;
             margin-bottom: 8px;
         }
 
         .instructions-table {
             width: 100%;
-            border: 1px solid #000;
             border-collapse: collapse;
         }
 
         .instructions-table td {
             vertical-align: top;
-            padding: 10px 12px;
+            padding: 6px 10px;
             font-size: 9px;
             line-height: 1.4;
         }
 
         .instructions-table td.col {
             width: 50%;
-            border: none;
         }
 
         .instructions-table td.footnote {
-            border-top: 1px solid #000;
             font-size: 8px;
             line-height: 1.35;
+            padding-top: 10px;
         }
 
         .instr-item {
@@ -134,54 +202,101 @@
         $deductsFromVl = in_array($code, ['VL', 'FL'], true);
         $deductsFromSl = $code === 'SL';
 
-        // Codes that have their own printed checkbox on this form.
-        $listedCodes = ['VL', 'FL', 'SL', 'ML', 'PTL', 'SPL', 'SOL', 'STL', 'VAWC', 'RHL', 'SLB', 'CAL', 'ADL'];
+        // Order, labels and legal bases exactly as printed on CS Form No. 6, Revised 2020
+        $leaveTypes = [
+            ['VL', 'Vacation Leave', 'Sec. 51, Rule XVI, Omnibus Rules Implementing E.O. No. 292'],
+            ['FL', 'Mandatory/Forced Leave', 'Sec. 25, Rule XVI, Omnibus Rules Implementing E.O. No. 292'],
+            ['SL', 'Sick Leave', 'Sec. 43, Rule XVI, Omnibus Rules Implementing E.O. No. 292'],
+            ['ML', 'Maternity Leave', 'R.A. No. 11210 / IRR issued by CSC, DOLE and SSS'],
+            ['PTL', 'Paternity Leave', 'R.A. No. 8187 / CSC MC No. 71, s. 1998, as amended'],
+            ['SPL', 'Special Privilege Leave', 'Sec. 21, Rule XVI, Omnibus Rules Implementing E.O. No. 292'],
+            ['SOL', 'Solo Parent Leave', 'RA No. 8972 / CSC MC No. 8, s. 2004'],
+            ['STL', 'Study Leave', 'Sec. 68, Rule XVI, Omnibus Rules Implementing E.O. No. 292'],
+            ['VAWC', '10-Day VAWC Leave', 'RA No. 9262 / CSC MC No. 15, s. 2005'],
+            ['RHL', 'Rehabilitation Privilege', 'Sec. 55, Rule XVI, Omnibus Rules Implementing E.O. No. 292'],
+            ['SLB', 'Special Leave Benefits for Women', 'RA No. 9710 / CSC MC No. 25, s. 2010'],
+            ['CAL', 'Special Emergency (Calamity) Leave', 'CSC MC No. 2, s. 2012, as amended'],
+            ['ADL', 'Adoption Leave', 'R.A. No. 8552'],
+        ];
+        $listedCodes = array_column($leaveTypes, 0);
+
+        // 1.000 -> "1", 2.500 -> "2.5"
+        $trim = fn($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.');
+        // Credits always print with 3 decimals, like the rest of 7.A
+        $three = fn($v) => number_format((float) $v, 3, '.', '');
 
         // Days without pay are only known once the application has been acted on.
         $noPay = (float) ($no_pay_days ?? 0);
         $withPay = max(0, (float) $application->days_applied - $noPay);
+        $approved = $application->status === 'approved';
+        $rejected = $application->status === 'rejected';
+
+        // Embedded as base64 so dompdf never needs filesystem/remote access
+        $logoPath = public_path('images/lgu.png');
+        $logo = file_exists($logoPath)
+            ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
+            : null;
     @endphp
 
     <!-- ============ FRONT PAGE ============ -->
 
-    <div class="header-text">
-        <p style="margin:0; font-weight: bold;">Republic of the Philippines</p>
-        <p style="margin:0; font-weight: bold;">Province of Isabela</p>
-        <p style="margin:0;font-weight: bold;">Municipality of Echague</p>
-        <h2 style="margin:5px 0; font-weight: bold;">APPLICATION FOR LEAVE</h2>
-    </div>
+    <div class="form-id">Civil Service Form No. 6<br>Revised 2020</div>
+
+    <table class="header">
+        <tr>
+            <td style="width:30%; text-align:right; padding-right:12px;">
+                @if ($logo)
+                    <img src="{{ $logo }}" style="width:64px; height:64px;">
+                @endif
+            </td>
+            <td style="width:40%;" class="header-lines">
+                Republic of the Philippines<br>
+                Province of Isabela<br>
+                Municipality of Echague
+            </td>
+            <td style="width:30%;"></td>
+        </tr>
+    </table>
+
+    <div class="form-title">APPLICATION FOR LEAVE</div>
 
     <table class="main">
         <tr>
             <td style="width:50%;">
-                <strong>1. OFFICE/DEPARTMENT</strong><br><br>
+                <strong>1. OFFICE/DEPARTMENT</strong><br>
                 {{ $application->employee->department->name ?? 'N/A' }}
             </td>
             <td style="width:50%;">
                 <strong>2. NAME:</strong>
-                <table style="width:100%; border:none;">
-                    <tr style="border:none;">
-                        <td style="border:none; width:33%;">(Last)<br>{{ $application->employee->surname }}</td>
-                        <td style="border:none; width:33%;">(First)<br>{{ $application->employee->first_name }}</td>
-                        <td style="border:none; width:34%;">(Middle)<br>{{ $application->employee->middle_name }}</td>
+                <table style="width:100%; border:none; border-collapse:collapse;">
+                    <tr>
+                        <td style="border:none; width:34%; padding:2px 0;">
+                            <span class="small-text">(Last)</span><br>{{ $application->employee->surname }}
+                        </td>
+                        <td style="border:none; width:33%; padding:2px 0;">
+                            <span class="small-text">(First)</span><br>{{ $application->employee->first_name }}
+                        </td>
+                        <td style="border:none; width:33%; padding:2px 0;">
+                            <span class="small-text">(Middle)</span><br>{{ $application->employee->middle_name }}
+                        </td>
                     </tr>
                 </table>
             </td>
         </tr>
         <tr>
             <td>
-                <strong>3. DATE OF FILING</strong><br><br>
+                <strong>3. DATE OF FILING</strong><br>
                 {{ $application->applied_at ? $application->applied_at->format('F d, Y') : 'N/A' }}
             </td>
             <td>
-                <table style="width:100%; border:none;">
-                    <tr style="border:none;">
-                        <td style="border:none; width:60%;">
-                            <strong>4. POSITION</strong><br><br>
+                <table style="width:100%; border:none; border-collapse:collapse;">
+                    <tr>
+                        <td style="border:none; width:62%; padding:0;">
+                            <strong>4. POSITION</strong><br>
                             {{ $application->employee->position }}
                         </td>
-                        <td style="border:none; width:40%;">
-                            <strong>5. SALARY</strong><br><br>
+                        <td style="border:none; width:38%; padding:0;">
+                            <strong>5. SALARY</strong><br>
                             &nbsp;
                         </td>
                     </tr>
@@ -195,87 +310,69 @@
             <td colspan="2" class="section-title">6. DETAILS OF APPLICATION</td>
         </tr>
         <tr>
-            <td style="width:50%;">
-                <strong>6.A TYPE OF LEAVE TO BE AVAILED OF</strong><br><br>
+            <td style="width:57%;">
+                <div style="margin-bottom:7px;"><strong>6.A TYPE OF LEAVE TO BE AVAILED OF</strong></div>
 
-                <span class="checkbox {{ $code === 'VL' ? 'checked' : '' }}">{{ $code === 'VL' ? 'X' : '' }}</span>
-                Vacation Leave <span class="small-text">(Sec. 51, Rule XVI, Omnibus Rules)</span><br><br>
+                @foreach ($leaveTypes as [$typeCode, $typeName, $basis])
+                    <div class="leave-item">
+                        <span
+                            class="checkbox {{ $code === $typeCode ? 'checked' : '' }}">{{ $code === $typeCode ? 'X' : '' }}</span>{{ $typeName }}
+                        <span class="cite">({{ $basis }})</span>
+                    </div>
+                @endforeach
 
-                <span class="checkbox {{ $code === 'FL' ? 'checked' : '' }}">{{ $code === 'FL' ? 'X' : '' }}</span>
-                Mandatory/Forced Leave <span class="small-text">(Sec. 25, Rule XVI, Omnibus Rules)</span><br><br>
-
-                <span class="checkbox {{ $code === 'SL' ? 'checked' : '' }}">{{ $code === 'SL' ? 'X' : '' }}</span>
-                Sick Leave <span class="small-text">(Sec. 43, Rule XVI, Omnibus Rules)</span><br><br>
-
-                <span class="checkbox {{ $code === 'ML' ? 'checked' : '' }}">{{ $code === 'ML' ? 'X' : '' }}</span>
-                Maternity Leave <span class="small-text">(R.A. No. 11210)</span><br><br>
-
-                <span class="checkbox {{ $code === 'PTL' ? 'checked' : '' }}">{{ $code === 'PTL' ? 'X' : '' }}</span>
-                Paternity Leave <span class="small-text">(R.A. No. 8187)</span><br><br>
-
-                <span class="checkbox {{ $code === 'SPL' ? 'checked' : '' }}">{{ $code === 'SPL' ? 'X' : '' }}</span>
-                Special Privilege Leave <span class="small-text">(Sec. 21, Rule XVI, Omnibus Rules)</span><br><br>
-
-                <span class="checkbox {{ $code === 'SOL' ? 'checked' : '' }}">{{ $code === 'SOL' ? 'X' : '' }}</span>
-                Solo Parent Leave <span class="small-text">(RA No. 8972)</span><br><br>
-
-                <span class="checkbox {{ $code === 'STL' ? 'checked' : '' }}">{{ $code === 'STL' ? 'X' : '' }}</span>
-                Study Leave <span class="small-text">(Sec. 68, Rule XVI, Omnibus Rules)</span><br><br>
-
-                <span class="checkbox {{ $code === 'VAWC' ? 'checked' : '' }}">{{ $code === 'VAWC' ? 'X' : '' }}</span>
-                10-Day VAWC Leave <span class="small-text">(RA No. 9262)</span><br><br>
-
-                <span class="checkbox {{ $code === 'RHL' ? 'checked' : '' }}">{{ $code === 'RHL' ? 'X' : '' }}</span>
-                Rehabilitation Privilege <span class="small-text">(Sec. 55, Rule XVI, Omnibus Rules)</span><br><br>
-
-                <span class="checkbox {{ $code === 'SLB' ? 'checked' : '' }}">{{ $code === 'SLB' ? 'X' : '' }}</span>
-                Special Leave Benefits for Women <span class="small-text">(RA No. 9710)</span><br><br>
-
-                <span class="checkbox {{ $code === 'CAL' ? 'checked' : '' }}">{{ $code === 'CAL' ? 'X' : '' }}</span>
-                Special Emergency (Calamity) Leave <span class="small-text">(CSC MC No. 2, s. 2012)</span><br><br>
-
-                <span class="checkbox {{ $code === 'ADL' ? 'checked' : '' }}">{{ $code === 'ADL' ? 'X' : '' }}</span>
-                Adoption Leave <span class="small-text">(R.A. No. 8552)</span><br><br>
-
-                <strong>Others:</strong>
-                {{ !in_array($code, $listedCodes, true) ? $application->leaveConfiguration->name : '_______________________' }}
+                <div style="margin-top:8px;">
+                    <em>Others:</em>
+                    @if (!in_array($code, $listedCodes, true))
+                        <span class="fill" style="min-width:180px;">{{ $application->leaveConfiguration->name }}</span>
+                    @else
+                        <span class="fill" style="min-width:180px;">&nbsp;</span>
+                    @endif
+                </div>
             </td>
-            <td style="width:50%;">
-                <strong>6.B DETAILS OF LEAVE</strong><br><br>
+            <td style="width:43%;">
+                <div style="margin-bottom:7px;"><strong>6.B DETAILS OF LEAVE</strong></div>
 
                 <em>In case of Vacation/Special Privilege Leave:</em><br>
-                <span class="checkbox"></span> Within the Philippines _______________<br>
-                <span class="checkbox"></span> Abroad (Specify) _______________<br><br>
+                <span class="checkbox"></span>Within the Philippines ______________<br>
+                <span class="checkbox"></span>Abroad (Specify) ________________<br><br>
 
                 <em>In case of Sick Leave:</em><br>
-                <span class="checkbox"></span> In Hospital (Specify Illness) _______________<br>
-                <span class="checkbox"></span> Out Patient (Specify Illness) _______________<br><br><br>
+                <span class="checkbox"></span>In Hospital (Specify Illness) _________<br>
+                <span class="checkbox"></span>Out Patient (Specify Illness) _________<br>
+                <div class="blank-line"></div><br>
 
                 <em>In case of Special Leave Benefits for Women:</em><br>
-                (Specify Illness) _______________________<br><br><br>
+                (Specify Illness) ______________________
+                <div class="blank-line"></div><br>
 
                 <em>In case of Study Leave:</em><br>
-                <span class="checkbox"></span> Completion of Master's Degree<br>
-                <span class="checkbox"></span> BAR/Board Examination Review<br>
+                <span class="checkbox"></span>Completion of Master's Degree<br>
+                <span class="checkbox"></span>BAR/Board Examination Review<br><br>
+
                 <em>Other purpose:</em><br>
-                <span class="checkbox"></span> Monetization of Leave Credits<br>
-                <span class="checkbox"></span> Terminal Leave<br>
+                <span class="checkbox"></span>Monetization of Leave Credits<br>
+                <span class="checkbox"></span>Terminal Leave
             </td>
         </tr>
         <tr>
             <td>
-                <strong>6.C NUMBER OF WORKING DAYS APPLIED FOR</strong><br><br>
-                {{-- {{ $application->days_applied }} days<br><br> --}}
-                {{ rtrim(rtrim(number_format((float) $application->days_applied, 3, '.', ''), '0'), '.') }} days<br><br>
+                <strong>6.C NUMBER OF WORKING DAYS APPLIED FOR</strong><br>
+                <div class="blank-line" style="margin:0 20px 10px 0;">
+                    {{ $trim($application->days_applied) }} day(s)
+                </div>
                 <strong>INCLUSIVE DATES</strong><br>
-                {{ $application->start_date->format('M d, Y') }} - {{ $application->end_date->format('M d, Y') }}
+                <div class="blank-line" style="margin:0 20px 0 0;">
+                    {{ $application->start_date->format('M d, Y') }} &ndash;
+                    {{ $application->end_date->format('M d, Y') }}
+                </div>
             </td>
             <td>
-                <strong>6.D COMMUTATION</strong><br><br>
-                <span class="checkbox checked">X</span> Not Requested<br>
-                <span class="checkbox"></span> Requested<br><br><br><br>
-                <div class="center underline">&nbsp;</div>
-                <div class="center small-text">(Signature of Applicant)</div>
+                <strong>6.D COMMUTATION</strong><br>
+                <span class="checkbox checked">X</span>Not Requested<br>
+                <span class="checkbox"></span>Requested
+                <div class="sig-line" style="margin-top:20px;">&nbsp;</div>
+                <div class="sig-label">(Signature of Applicant)</div>
             </td>
         </tr>
     </table>
@@ -286,98 +383,96 @@
         </tr>
         <tr>
             <td style="width:50%;">
-                <strong>7.A CERTIFICATION OF LEAVE CREDITS</strong><br><br>
-                <table style="width:100%; border-collapse: collapse;">
+                <strong>7.A CERTIFICATION OF LEAVE CREDITS</strong>
+                <div class="center" style="margin-top:4px;">
+                    As of <span class="fill"
+                        style="min-width:130px;">{{ now()->timezone('Asia/Manila')->format('F d, Y') }}</span>
+                </div>
+
+                <table class="credits">
                     <tr>
-                        <td style="border:1px solid #000;"></td>
-                        <td style="border:1px solid #000; text-align:center;"><strong>Vacation Leave</strong></td>
-                        <td style="border:1px solid #000; text-align:center;"><strong>Sick Leave</strong></td>
+                        <td></td>
+                        <td class="num"><strong>Vacation Leave</strong></td>
+                        <td class="num"><strong>Sick Leave</strong></td>
                     </tr>
                     <tr>
-                        <td style="border:1px solid #000;">Total Earned</td>
-                        <td style="border:1px solid #000;">{{ $vl_total ?? '' }}</td>
-                        <td style="border:1px solid #000;">{{ $sl_total ?? '' }}</td>
+                        <td class="label">Total Earned</td>
+                        <td class="num">{{ $vl_total ?? '' }}</td>
+                        <td class="num">{{ $sl_total ?? '' }}</td>
                     </tr>
                     <tr>
-                        <td style="border:1px solid #000;">Less this application</td>
-                        {{-- <td style="border:1px solid #000;">{{ $deductsFromVl ? $application->days_applied : '' }}
-                        </td>
-                        <td style="border:1px solid #000;">{{ $deductsFromSl ? $application->days_applied : '' }}</td>
-                        --}}
-                        <td style="border:1px solid #000;">
-                            {{ $deductsFromVl ? rtrim(rtrim(number_format((float) $application->days_applied, 3, '.', ''), '0'), '.') : '' }}
-                        </td>
-                        <td style="border:1px solid #000;">
-                            {{ $deductsFromSl ? rtrim(rtrim(number_format((float) $application->days_applied, 3, '.', ''), '0'), '.') : '' }}
-                        </td>
+                        <td class="label">Less this application</td>
+                        <td class="num">{{ $deductsFromVl ? $three($application->days_applied) : '' }}</td>
+                        <td class="num">{{ $deductsFromSl ? $three($application->days_applied) : '' }}</td>
                     </tr>
                     <tr>
-                        <td style="border:1px solid #000;">Balance</td>
-                        <td style="border:1px solid #000;">{{ $vl_balance ?? '' }}</td>
-                        <td style="border:1px solid #000;">{{ $sl_balance ?? '' }}</td>
+                        <td class="label">Balance</td>
+                        <td class="num">{{ $vl_balance ?? '' }}</td>
+                        <td class="num">{{ $sl_balance ?? '' }}</td>
                     </tr>
                 </table>
-                <br>
 
-                <div class="center small-text">
-                    <strong>{{ $signatories['hr_officer'] ?? '' }}</strong>
-                </div>
-                <div class="center underline">&nbsp;</div>
-                <div class="center small-text">{{ $positions['hr_officer'] ?? 'HR Officer' }}</div>
+                <div class="sig-line">{{ $signatories['hr_officer'] ?? '' }}</div>
+                <div class="sig-label">{{ $positions['hr_officer'] ?? 'HR Officer' }}</div>
             </td>
             <td style="width:50%;">
-                <strong>7.B RECOMMENDATION</strong><br><br>
-                <span
-                    class="checkbox {{ $application->status === 'approved' ? 'checked' : '' }}">{{ $application->status === 'approved' ? 'X' : '' }}</span>
-                For approval<br>
-                <span
-                    class="checkbox {{ $application->status === 'rejected' ? 'checked' : '' }}">{{ $application->status === 'rejected' ? 'X' : '' }}</span>
-                For disapproval due to
-                {{ $application->status === 'rejected' && $application->rejection_reason ? $application->rejection_reason : '_________________________________________________' }}
-                <br>
-                _________________________________________________<br>
-                _________________________________________________<br><br><br>
-                <div class="center underline">&nbsp;</div>
-                <div class="center small-text">(Authorized Officer)</div>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <strong>7.C APPROVED FOR</strong><br><br>
-                {{ $application->status === 'approved' ? rtrim(rtrim(number_format($withPay, 3, '.', ''), '0'), '.') : '_______' }}
-                days with pay<br>
-                {{ $application->status === 'approved' ? rtrim(rtrim(number_format($noPay, 3, '.', ''), '0'), '.') : '_______' }}
-                days without pay<br>
-                _______ others (Specify)
-            </td>
-            <td>
-                <strong>7.D DISAPPROVED DUE TO:</strong><br><br>
-                @if ($application->status === 'rejected' && $application->rejection_reason)
-                    &nbsp;&nbsp;{{ $application->rejection_reason }}
+                <strong>7.B RECOMMENDATION</strong><br>
+                <span class="checkbox {{ $approved ? 'checked' : '' }}">{{ $approved ? 'X' : '' }}</span>For
+                approval<br>
+                <span class="checkbox {{ $rejected ? 'checked' : '' }}">{{ $rejected ? 'X' : '' }}</span>For disapproval
+                due to
+                @if ($rejected && $application->rejection_reason)
+                    <div style="border-bottom:1px solid #000; padding:2px 0;">{{ $application->rejection_reason }}</div>
                 @else
-                    &nbsp;&nbsp;__________________________________________<br>
-                    &nbsp;&nbsp;__________________________________________<br>
-                    &nbsp;&nbsp;__________________________________________
+                    <div class="blank-line"></div>
                 @endif
+                <div class="blank-line"></div>
+                <div class="blank-line"></div>
+                <div class="sig-line" style="margin-top:22px;">&nbsp;</div>
+                <div class="sig-label">(Authorized Officer)</div>
             </td>
         </tr>
         <tr>
-            <td colspan="2" class="center">
-                <strong><u>{{ $signatories['approving_authority'] ?? '' }}</u></strong>
-                <br>
-                {{ $positions['approving_authority'] ?? '' }}
+            <td>
+                <strong>7.C APPROVED FOR:</strong>
+                <div style="margin:6px 0 0 10px; line-height:1.7;">
+                    <span class="fill">{{ $approved ? $trim($withPay) : '' }}</span> days with pay<br>
+                    <span class="fill">{{ $approved ? $trim($noPay) : '' }}</span> days without pay<br>
+                    <span class="fill">&nbsp;</span> others (Specify)
+                </div>
+            </td>
+            <td>
+                <strong>7.D DISAPPROVED DUE TO:</strong>
+                @if ($rejected && $application->rejection_reason)
+                    <div style="border-bottom:1px solid #000; padding:2px 0; margin-top:6px;">
+                        {{ $application->rejection_reason }}
+                    </div>
+                @else
+                    <div class="blank-line"></div>
+                @endif
+                <div class="blank-line"></div>
+                <div class="blank-line"></div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="center" style="padding-top:18px; padding-bottom:6px;">
+                <strong><u>{{ $signatories['approving_authority'] ?? '' }}</u></strong><br>
+                <strong>{{ $positions['approving_authority'] ?? '' }}</strong>
             </td>
         </tr>
     </table>
+
     <!-- ============ BACK PAGE — INSTRUCTIONS AND REQUIREMENTS ============ -->
 
     <div class="back-page">
+
+        <div class="form-id" style="margin-bottom:6px;">Civil Service Form No. 6<br>Revised 2020</div>
 
         <div class="instructions-title">INSTRUCTIONS AND REQUIREMENTS</div>
 
         <table class="instructions-table">
             <tr>
-                <td class="col" style="border-right: 1px solid #000;">
+                <td class="col">
                     <span class="small-text">
                         Application for any type of leave shall be made on this Form and
                         <strong><u>to be accomplished at least in duplicate</u></strong> with documentary
