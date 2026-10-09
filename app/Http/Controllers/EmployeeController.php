@@ -163,7 +163,7 @@ class EmployeeController extends Controller
 
         // Authorization check before DB transaction
         $admin = request()->user();
-        if (!$admin || $admin->role !== 'super_admin') {
+        if (!$admin || !in_array($admin->role, ['super_admin', 'hr_admin'], true)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
         $employee = DB::transaction(function () use ($request) {

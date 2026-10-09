@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-// use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use App\Http\Controllers\{
     AuthController,
     EmployeeController,
@@ -48,9 +47,9 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('departments', [DepartmentController::class, 'index']);
     Route::get('departments/{id}', [DepartmentController::class, 'show']);
 
-
     Route::get('positions', [PositionController::class, 'index']);
-    //mobile
+
+    // Mobile
     Route::get('/dashboard/balances', [LeaveCreditController::class, 'getLeaveCreditBalances']);
     Route::get('/my-attendance', [AttendanceController::class, 'myAttendance']);
 
@@ -64,7 +63,6 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/{id}/cancel', [LeaveApplicationController::class, 'cancel']);
     });
 
-
     Route::get('leave-configurations', [LeaveConfigurationController::class, 'index']);
     Route::get('leave-configurations/{id}', [LeaveConfigurationController::class, 'show']);
 
@@ -74,34 +72,37 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/{id}/cancel', [LeaveMonetizationController::class, 'cancel']);
     });
 
-    // 3. HR ADMIN ONLY ROUTES (Using your new Middleware)
+    // 3. HR ADMIN + SUPER ADMIN ROUTES — everything except accounts and activity logs
     Route::middleware('role:super_admin,hr_admin')->group(function () {
 
+        // Employees
+        Route::post('employees', [EmployeeController::class, 'store']);
         Route::put('employees/{id}', [EmployeeController::class, 'update']);
         Route::patch('employees/{id}', [EmployeeController::class, 'update']);
         Route::delete('employees/{id}', [EmployeeController::class, 'destroy']);
-
-        Route::put('personnel/{id}', [SignatoryController::class, 'update']);
-        Route::get('personnel', [SignatoryController::class, 'index']);
-        // Route::delete('signatories/{id}', [SignatoryController::class, 'destroy']);
-
         Route::post('employees/{id}/resign', [EmployeeController::class, 'resign']);
         Route::post('employees/{id}/rehire', [EmployeeController::class, 'rehire']);
         Route::post('/employees/{id}/retire', [EmployeeController::class, 'retire']);
+
+        // Signatories
+        Route::get('personnel', [SignatoryController::class, 'index']);
+        Route::put('personnel/{id}', [SignatoryController::class, 'update']);
+
         // Leave Application Admin Actions
         Route::post('leave-applications/{id}/approve', [LeaveApplicationController::class, 'approve']);
         Route::post('leave-applications/{id}/reject', [LeaveApplicationController::class, 'reject']);
         Route::post('leave-applications/{id}/cancel-approved', [LeaveApplicationController::class, 'cancelApproved']);
-        // Leave Records (HR Management)
+
+        // Leave Records
         Route::get('leave-records/summary', [LeaveRecordController::class, 'summary']);
         Route::apiResource('leave-records', LeaveRecordController::class)->except(['store']);
-        // Route::apiResource('leave-records', LeaveRecordController::class);
 
         // Credit Admin
         Route::post('employees/leave-credits/initialize-all', [LeaveCreditController::class, 'initializeAllCredits']);
         Route::post('/leave-credits/grant', [LeaveCreditController::class, 'grantLeave']);
 
-        // Attendance Admin
+        // Attendance
+        Route::get('attendance', [AttendanceController::class, 'index']);
         Route::post('attendance/upload', [AttendanceController::class, 'upload']);
         Route::get('attendance/missing-check', [AttendanceController::class, 'checkMissingAttendance']);
         Route::post('attendance/reverse-month', [AttendanceController::class, 'reverseMonth']);
@@ -112,7 +113,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('slips', [SlipController::class, 'store']);
         Route::post('slips/{id}/cancel', [SlipController::class, 'cancel']);
 
-        // --- Promotion History ---
+        // Employment History
         Route::prefix('employees/{employeeId}/promotions')->group(function () {
             Route::get('/', [EmploymentHistoryController::class, 'index']);
             Route::post('/', [EmploymentHistoryController::class, 'store']);
@@ -120,55 +121,58 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
             Route::delete('/{promotionId}', [EmploymentHistoryController::class, 'destroy']);
         });
 
+        // Leave Credits
         Route::prefix('employees/{employeeId}/leave-credits')->group(function () {
             Route::get('/', [LeaveCreditController::class, 'index']);
             Route::post('/initialize', [LeaveCreditController::class, 'initializeCredits']);
             Route::put('/{creditId}', [LeaveCreditController::class, 'update']);
         });
 
+        // Dashboard
         Route::get('/dashboard/leave-stats', [DashboardController::class, 'leaveStats']);
-        // --- Attendance ---
-        Route::get('attendance', [AttendanceController::class, 'index']);
 
-
+        // Monetization Admin Actions
         Route::post('leave-monetizations/{id}/approve', [LeaveMonetizationController::class, 'approve']);
         Route::post('leave-monetizations/{id}/reject', [LeaveMonetizationController::class, 'reject']);
         Route::post('leave-monetizations/{id}/cancel-approved', [LeaveMonetizationController::class, 'cancelApproved']);
 
+        // Reports
         Route::prefix('reports')->group(function () {
             Route::get('/employee-masterlist', [ReportController::class, 'employeeMasterlist']);
             Route::get('/leave-balances', [ReportController::class, 'leaveBalances']);
             Route::get('/leave-utilization', [ReportController::class, 'leaveUtilization']);
             Route::get('/lwop', [ReportController::class, 'lwop']);
         });
-    });
 
-    // 4. SUPER ADMIN ONLY ROUTES
-    Route::middleware('role:super_admin')->group(function () {
-        // Account Management
-        Route::apiResource('users', UserController::class)->only(['index', 'store', 'destroy']);
-        Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword']);
-        Route::post('employees', [EmployeeController::class, 'store']);
-
+        // Leave Configuration (WRITE)
         Route::post('leave-configurations', [LeaveConfigurationController::class, 'store']);
         Route::put('leave-configurations/{id}', [LeaveConfigurationController::class, 'update']);
         Route::delete('leave-configurations/{id}', [LeaveConfigurationController::class, 'destroy']);
         Route::post('leave-configurations/{id}/reactivate', [LeaveConfigurationController::class, 'reactivate']);
 
-        // NEW — Departments (WRITE)
+        // Departments (WRITE)
         Route::post('departments', [DepartmentController::class, 'store']);
         Route::put('departments/{id}', [DepartmentController::class, 'update']);
         Route::delete('departments/{id}', [DepartmentController::class, 'destroy']);
 
+        // Holidays
         Route::get('/holidays', [HolidayController::class, 'index']);
         Route::post('/holidays', [HolidayController::class, 'store']);
         Route::put('/holidays/{id}', [HolidayController::class, 'update']);
         Route::delete('/holidays/{id}', [HolidayController::class, 'destroy']);
 
+        // Positions (WRITE)
         Route::post('/positions', [PositionController::class, 'store']);
         Route::put('/positions/{id}', [PositionController::class, 'update']);
+    });
 
-        // NEW — Activity Logs
+    // 4. SUPER ADMIN ONLY ROUTES — account management and audit trail
+    Route::middleware('role:super_admin')->group(function () {
+        // Account Management
+        Route::apiResource('users', UserController::class)->only(['index', 'store', 'destroy']);
+        Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword']);
+
+        // Activity Logs
         Route::get('/activity-logs/actions', [ActivityLogController::class, 'actions']);
         Route::get('activity-logs', [ActivityLogController::class, 'index']);
     });
