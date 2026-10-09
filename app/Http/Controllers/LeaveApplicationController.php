@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\ActivityLog;
 use App\Models\Holiday;
 use App\Models\Signatory;
-
+use App\Service\LeaveAccrualService;
 use function Illuminate\Support\months;
 
 class LeaveApplicationController extends Controller
@@ -167,7 +167,7 @@ class LeaveApplicationController extends Controller
                 'message' => 'Target employee profile could not be determined.'
             ], 422);
         }
-
+        app(LeaveAccrualService::class)->accrueForEmployee($employee);
 
         $validated['days_applied'] = $config->grant_type === 'event_manual'
             ? Carbon::parse($validated['start_date'])->diffInDays(Carbon::parse($validated['end_date'])) + 1
@@ -542,6 +542,7 @@ class LeaveApplicationController extends Controller
         }
 
         $employee = Employee::findOrFail($application->employee_id);
+        app(LeaveAccrualService::class)->accrueForEmployee($employee);
 
         // If it's Force Leave, we need the VL credit record, not the FL record.
         $targetCode = ($config->code === 'FL') ? 'VL' : $config->code;

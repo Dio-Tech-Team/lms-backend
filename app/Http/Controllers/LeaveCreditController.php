@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\LeaveConfiguration;
 use App\Models\LeaveRecord;
 use App\Models\ActivityLog;
+use App\Service\LeaveAccrualService;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -20,8 +21,8 @@ class LeaveCreditController extends Controller
 
         // OPTIMIZED: INNER JOIN instead of two separate queries
         // Fixed: last_name → surname bug
-        $employee = Employee::select(['id', 'first_name', 'surname'])
-            ->findOrFail($employeeId);
+        $employee = Employee::findOrFail($employeeId);
+        app(LeaveAccrualService::class)->accrueForEmployee($employee);
 
         // OPTIMIZED: INNER JOIN for leaveConfiguration (always exists)
         $credits = LeaveCredit::select([
@@ -611,6 +612,7 @@ class LeaveCreditController extends Controller
         if (!$employee) {
             return response()->json(['message' => 'Employee profile not found'], 404);
         }
+        app(LeaveAccrualService::class)->accrueForEmployee($employee);
 
         $balances = LeaveCredit::join('leave_configurations', 'leave_credits.leave_configuration_id', '=', 'leave_configurations.id')
             ->where('leave_credits.employee_id', $employee->id)

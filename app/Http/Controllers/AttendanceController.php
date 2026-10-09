@@ -8,6 +8,7 @@ use App\Models\Attendance;
 use App\Models\LeaveCredit;
 use App\Models\LeaveConfiguration;
 use App\Models\LeaveRecord;
+use App\Service\LeaveAccrualService;
 use App\Models\ActivityLog;
 use App\Service\LeaveCreditComputationService;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -351,8 +352,10 @@ class AttendanceController extends Controller
                 ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
             );
 
-            // Earned VL adds normally
-            $vlCredit->total_credits += $computation['vl_earned'];
+            // Base 1.250 is posted on the hiring-date anniversary by LeaveAccrualService.
+            // The DTR only applies the casual-LWOP reduction (0 for everyone else).
+            $vlCredit->total_credits = round((float) $vlCredit->total_credits
+                + ($computation['vl_earned'] - LeaveAccrualService::MONTHLY), 3);
             $vlCredit->last_updated = now();
             $vlCredit->save();
 
@@ -398,7 +401,8 @@ class AttendanceController extends Controller
                 ['employee_id' => $employee->id, 'leave_configuration_id' => $slConfig->id, 'year' => $year],
                 ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
             );
-            $slCredit->total_credits += $computation['sl_earned'];
+            $slCredit->total_credits = round((float) $slCredit->total_credits
+                + ($computation['sl_earned'] - LeaveAccrualService::MONTHLY), 3);
             $slCredit->last_updated = now();
             $slCredit->save();
         }
@@ -421,7 +425,9 @@ class AttendanceController extends Controller
                 $absorbed = (float) $attendance->tardiness_equivalent_days
                     - (float) ($attendance->lwop_days ?? 0);
 
-                $vlCredit->total_credits = max(0, (float) $vlCredit->total_credits - (float) $attendance->vl_earned);
+                // Undo only the LWOP reduction — the anniversary accrual stays
+                $vlCredit->total_credits = round((float) $vlCredit->total_credits
+                    + (LeaveAccrualService::MONTHLY - (float) $attendance->vl_earned), 3);
                 $vlCredit->used_credits  = max(0, (float) $vlCredit->used_credits - $absorbed);
                 $vlCredit->last_updated  = now();
                 $vlCredit->save(); // saving hook recomputes remaining_balance
@@ -436,8 +442,8 @@ class AttendanceController extends Controller
                 ->first();
 
             if ($slCredit) {
-                $slCredit->total_credits = max(0, (float) $slCredit->total_credits - (float) $attendance->sl_earned);
-                $slCredit->last_updated  = now();
+                $slCredit->total_credits = round((float) $slCredit->total_credits
+                    + (LeaveAccrualService::MONTHLY - (float) $attendance->sl_earned), 3);
                 $slCredit->save();
             }
         }

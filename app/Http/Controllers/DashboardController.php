@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use App\Models\LeaveApplication;
 use App\Models\LeaveCredit;
 use App\Models\Employee;
+use App\Service\LeaveAccrualService;
+use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
@@ -32,6 +34,10 @@ class DashboardController extends Controller
             if ($result['initialized'] > 0) {
                 $autoInitMessage = "Leave credits for {$currentYear} were initialized automatically for {$result['initialized']} employee(s).";
             }
+        }
+        // Monthly hiring-date credits for all employees — runs once per day
+        if (Cache::add('leave_accrual_' . now('Asia/Manila')->toDateString(), true, now()->addDay())) {
+            app(LeaveAccrualService::class)->accrueAll();
         }
 
         $year = $request->year ?? now()->year;

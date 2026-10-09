@@ -19,6 +19,8 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Log;
 use App\Models\ActivityLog;
 use Carbon\Carbon;
+use App\Models\LeaveAccrual;
+use App\Service\LeaveAccrualService;
 
 
 class EmployeeController extends Controller
@@ -550,7 +552,7 @@ class EmployeeController extends Controller
             ? \Carbon\Carbon::parse($earliestPermanent->effective_date)
             : \Carbon\Carbon::parse($employee->date_hired);
 
-        $yearsServed = max(0, $startDate->diffInYears(now()));
+        $yearsServed = max(0, (int) floor($startDate->diffInYears(now())));
 
         if ($yearsServed < 10) {
             $yearsUntilFirst = 10 - $yearsServed;
@@ -615,6 +617,8 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        app(LeaveAccrualService::class)->accrueForEmployee(Employee::find($employee->id));
+
         $year = (int) $request->input('year', now()->year);   // NEW
 
         $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
@@ -648,6 +652,8 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        app(LeaveAccrualService::class)->accrueForEmployee(Employee::find($employee->id));
+
         $year = (int) $request->input('year', now()->year);
 
         $vlConfig = LeaveConfiguration::where('code', 'VL')->first();
@@ -674,6 +680,10 @@ class EmployeeController extends Controller
      * Plain-language reason for a monthly credit row, so the employee can
      * see why they earned less than 1.250 or lost VL to tardiness.
      */
+    /**
+     * Plain-language description of a DTR upload row: LWOP days (and the
+     * reduced earning for casual employees) and tardiness for VL.
+     */
     private function monthlyParticulars($row, string $type): string
     {
         $num = fn($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.');
@@ -681,7 +691,9 @@ class EmployeeController extends Controller
 
         $lwop = (float) $row->absent_without_leave_days;
         if ($lwop > 0) {
-            $parts[] = $num($lwop) . ' day(s) absent w/o leave';
+            $earned = (float) ($type === 'vl' ? $row->vl_earned : $row->sl_earned);
+            $parts[] = $num($lwop) . ' day(s) absent w/o leave'
+                . ($earned < LeaveAccrualService::MONTHLY ? ' (earned ' . number_format($earned, 3) . ')' : '');
         }
 
         // Tardiness only affects VL
@@ -697,9 +709,8 @@ class EmployeeController extends Controller
             }
         }
 
-        return $parts
-            ? 'Monthly credit: ' . implode('; ', $parts)
-            : 'Monthly credit (full attendance)';
+        $label = "{$row->month} {$row->year} DTR";
+        return $parts ? $label . ': ' . implode('; ', $parts) : $label;
     }
     private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type, int $year, array $deductionConfigIds = []): array
     {
@@ -713,30 +724,64 @@ class EmployeeController extends Controller
                 ->first();
         }
 
-        $attendanceRows = Attendance::where('employee_id', $employee->id)->where('year', $year)                              // NEW
+        $attendanceRows = Attendance::where('employee_id', $employee->id)->where('year', $year)->get();
+
+        // Accruals on or before the paper-card transfer are already in the opening balance
+        $openingDate = $config
+            ? \App\Models\LeaveCredit::where('employee_id', $employee->id)
+            ->where('leave_configuration_id', $config->id)
+            ->whereNotNull('opening_balance_date')
+            ->min('opening_balance_date')
+            : null;
+
+        // Monthly 1.250 credit posted on the hiring-date anniversary
+        $accruals = LeaveAccrual::where('employee_id', $employee->id)
+            ->whereYear('accrual_date', $year)
+            ->when($openingDate, fn($q) => $q->whereDate('accrual_date', '>', $openingDate))
             ->get();
 
-        foreach ($attendanceRows as $row) {
-            $earned = $type === 'vl'
-                ? $row->vl_earned - ($row->tardiness_equivalent_days - $row->lwop_days)
-                : $row->sl_earned;
-
-            $creditDate = \Carbon\Carbon::parse("{$row->month} 1, {$row->year}");
-
+        foreach ($accruals as $acc) {
+            $date = Carbon::parse($acc->accrual_date);
 
             $entries[] = [
-                'sort_date'   => $creditDate->copy()->endOfMonth(),
-                // 'period'      => $creditDate->format('m-d-y') . ' (' . $creditDate->format('M') . ')',
-                'period'      => $creditDate->copy()->endOfMonth()->format('m-d-y') . ' (' . $creditDate->format('M') . ')',
-                // 'particulars' => 'Monthly credit',
-                'particulars' => $this->monthlyParticulars($row, $type),
-                'earned'      => round($earned, 3),
-                'abs_wp'      => (float) $row->absent_with_leave_days,
-                'abs_wop'     => (float) $row->absent_without_leave_days,
+                'sort_date'   => $date,
+                'period'      => $date->format('M j, Y'),
+                'particulars' => 'Monthly credit',
+                'earned'      => round((float) ($type === 'vl' ? $acc->vl_earned : $acc->sl_earned), 3),
+                'abs_wp'      => 0,
+                'abs_wop'     => 0,
                 'used'        => 0,
             ];
         }
 
+        // DTR upload: casual-LWOP reduction (negative earned) and, for VL, tardiness
+        foreach ($attendanceRows as $row) {
+            $reduction = round((float) ($type === 'vl' ? $row->vl_earned : $row->sl_earned) - LeaveAccrualService::MONTHLY, 3);
+            $tardiness = $type === 'vl'
+                ? round((float) $row->tardiness_equivalent_days - (float) $row->lwop_days, 3)
+                : 0;
+
+            // Nothing to show for this leave type
+            if (
+                $reduction == 0 && $tardiness == 0
+                && (float) $row->absent_without_leave_days == 0
+                && (float) $row->absent_with_leave_days == 0
+            ) {
+                continue;
+            }
+
+            $uploaded = Carbon::parse($row->created_at);
+
+            $entries[] = [
+                'sort_date'   => $uploaded,
+                'period'      => $uploaded->format('M j, Y'),
+                'particulars' => $this->monthlyParticulars($row, $type),
+                'earned'      => $reduction,
+                'abs_wp'      => (float) $row->absent_with_leave_days,
+                'abs_wop'     => (float) $row->absent_without_leave_days,
+                'used'        => $tardiness,
+            ];
+        }
         if ($config) {
             $recordConfigIds = array_merge([$config->id], $deductionConfigIds);
             $leaveRecords = LeaveRecord::where('employee_id', $employee->id)
@@ -752,8 +797,7 @@ class EmployeeController extends Controller
 
                 $entries[] = [
                     'sort_date'   => $start,
-                    'period'      => $start->format('m-d-y') . ' to ' . $end->format('m-d-y'),
-                    // 'particulars' => $rec->leaveConfiguration->name . ' taken',
+                    'period'      => $start->format('M j, Y') . ' to ' . $end->format('M j, Y'),
                     // Tardiness that exceeded the VL balance is also stored as a
                     // leave record. Label it, or it reads like leave the employee filed.
                     'particulars' => $rec->attendance_id
@@ -782,7 +826,7 @@ class EmployeeController extends Controller
 
                     $entries[] = [
                         'sort_date'   => $slip->date,
-                        'period'      => $slip->date->format('m-d-y'),
+                        'period'      => $slip->date->format('M j, Y'),
                         'particulars' => "Personal slip ({$time})",
                         'earned'      => 0,
                         'abs_wp'      => 0,
@@ -803,7 +847,7 @@ class EmployeeController extends Controller
 
                 $entries[] = [
                     'sort_date'   => $date,
-                    'period'      => $date->format('m-d-y'),
+                    'period'      => $date->format('M j, Y'),
                     'particulars' => $config->name . ' monetized',
                     'earned'      => 0,
                     'abs_wp'      => 0,
@@ -825,27 +869,24 @@ class EmployeeController extends Controller
                     $transferDate = $credit->opening_balance_date
                         ? \Carbon\Carbon::parse($credit->opening_balance_date)
                         : $baseDate;
-
-                    $asOfDate = $credit->opening_balance_date
-                        ? $transferDate->copy()->subMonthNoOverflow()->endOfMonth()
-                        : $transferDate;
+                    // Paper balance is as of the day it was transferred
+                    $asOfDate = $transferDate;
 
 
                     $entries[] = [
                         'sort_date'   => $asOfDate,
-                        // 'period'      => $transferDate->format('m-d-y'),
-                        'period'      => $asOfDate->format('m-d-y') . ' (' . $asOfDate->format('M') . ')',
+                        // 'period'      => $transferDate->format('M j, Y'),
+                        'period'      => $asOfDate->format('M j, Y'),
                         'particulars' => 'Transferred from physical leave card',
                         'earned'      => round((float) $credit->opening_balance, 3),
                         'abs_wp'      => 0,
                         'abs_wop'     => 0,
                         'used'        => 0,
                     ];
-
-                    $rawMonthlyEarnedSum = $type === 'vl'
-                        ? $attendanceRows->sum('vl_earned')
-                        : $attendanceRows->sum('sl_earned');
-                    $expectedTotalCredits = (float) $credit->opening_balance + $rawMonthlyEarnedSum;
+                    // Anniversary credits after the transfer, plus DTR reductions (casual LWOP)
+                    $accrualSum   = $accruals->sum(fn($a) => (float) ($type === 'vl' ? $a->vl_earned : $a->sl_earned));
+                    $reductionSum = $attendanceRows->sum(fn($r) => (float) ($type === 'vl' ? $r->vl_earned : $r->sl_earned) - LeaveAccrualService::MONTHLY);
+                    $expectedTotalCredits = (float) $credit->opening_balance + $accrualSum + $reductionSum;
                     $delta = round((float) $credit->total_credits - $expectedTotalCredits, 3);
                     if ($delta !== 0.0) {
                         $correctionLog = ActivityLog::where('subject_type', 'LeaveCredit')
@@ -863,7 +904,7 @@ class EmployeeController extends Controller
 
                         $entries[] = [
                             'sort_date'   => $correctionDate,
-                            'period'      => $correctionDate->format('m-d-y'),
+                            'period'      => $correctionDate->format('M j, Y'),
                             'particulars' => "Balance correction"
                                 . ($delta > 0 ? ' (increase)' : ' (decrease)')
                                 . " by {$actor}",
