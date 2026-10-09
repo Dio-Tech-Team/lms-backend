@@ -348,7 +348,7 @@ class LeaveMonetizationController extends Controller
         }
 
         $validated = $request->validate([
-            'cancellation_reason' => 'required|string|max:1000',
+            'cancellation_reason' => 'nullable|string|max:1000',
         ]);
 
         $error = DB::transaction(function () use ($monetization, $request, $validated) {
@@ -372,7 +372,7 @@ class LeaveMonetizationController extends Controller
 
             $monetization->update([
                 'status'              => 'cancelled',
-                'cancellation_reason' => $validated['cancellation_reason'],
+                'cancellation_reason' => $validated['cancellation_reason'] ?? null,
                 'cancelled_by'        => $request->user()->id,
                 'cancelled_at'        => now(),
             ]);
@@ -384,7 +384,8 @@ class LeaveMonetizationController extends Controller
             ActivityLog::create([
                 'user_id'      => $request->user()->id,
                 'action'       => 'leave_monetization.cancelled_approved',
-                'description'  => "Reversed approved monetization of {$days} day(s) for {$name} — {$days} day(s) restored. Reason: {$validated['cancellation_reason']}",
+                'description'  => "Reversed approved monetization of {$days} day(s) for {$name} — {$days} day(s) restored."
+                    . (!empty($validated['cancellation_reason']) ? " Reason: {$validated['cancellation_reason']}" : ''),
                 'subject_type' => 'LeaveMonetization',
                 'subject_id'   => $monetization->id,
             ]);

@@ -619,7 +619,7 @@ class LeaveApplicationController extends Controller
     {
 
         $validated = $request->validate([
-            'rejection_reason' => 'required|string|max:1000',
+            'rejection_reason' => 'nullable|string|max:1000',
         ]);
 
         $application = LeaveApplication::findOrFail($id);
@@ -634,13 +634,14 @@ class LeaveApplicationController extends Controller
             'status'      => 'rejected',
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
-            'rejection_reason'  => $validated['rejection_reason'],
+            'rejection_reason'  => $validated['rejection_reason'] ?? null,
         ]);
 
         ActivityLog::create([
             'user_id'      => $request->user()->id,
             'action'       => 'leave_application.rejected',
-            'description'  => "Rejected leave application #{$application->id}: {$validated['rejection_reason']}",
+            'description'  => "Rejected leave application #{$application->id}"
+                . (!empty($validated['rejection_reason']) ? ": {$validated['rejection_reason']}" : ''),
             'subject_type' => 'LeaveApplication',
             'subject_id'   => $application->id,
         ]);
@@ -704,7 +705,7 @@ class LeaveApplicationController extends Controller
     public function cancelApproved(Request $request, $id)
     {
         $validated = $request->validate([
-            'reason'         => 'required|string|max:1000',
+            'reason'         => 'nullable|string|max:1000',
             'last_day_taken' => 'nullable|date',
             'none_taken'     => 'nullable|boolean',
             'dry_run'        => 'nullable|boolean',
@@ -823,7 +824,7 @@ class LeaveApplicationController extends Controller
                 // Full cancel
                 $application->update([
                     'status'              => 'cancelled',
-                    'cancellation_reason' => $validated['reason'],
+                    'cancellation_reason' => $validated['reason'] ?? null,
                     'cancelled_at'        => now(),
                     'original_end_date'     => $application->original_end_date ?? $application->end_date,
                     'original_days_applied' => $application->original_days_applied ?? $application->days_applied,
@@ -836,7 +837,7 @@ class LeaveApplicationController extends Controller
                     'original_days_applied' => $application->original_days_applied ?? $application->days_applied,
                     'end_date'            => $lastDay->toDateString(),
                     'days_applied'        => $daysUsed,
-                    'cancellation_reason' => $validated['reason'],
+                    'cancellation_reason' => $validated['reason'] ?? null,
                     'cancelled_at'        => now(),
                 ]);
                 $record?->update([
@@ -853,7 +854,8 @@ class LeaveApplicationController extends Controller
                 'description'  => ($daysUsed == 0
                     ? "Cancelled approved leave application #{$application->id} ({$config->name}, {$originalLabel})"
                     : "Partially cancelled leave application #{$application->id} ({$config->name}, {$originalLabel}), last day taken {$lastDay->toDateString()}")
-                    . ". {$refundDays} day(s) returned. Reason: {$validated['reason']}",
+                    . ". {$refundDays} day(s) returned."
+                    . (!empty($validated['reason']) ? " Reason: {$validated['reason']}" : ''),
                 'subject_type' => 'LeaveApplication',
                 'subject_id'   => $application->id,
             ]);
