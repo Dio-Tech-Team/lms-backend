@@ -191,12 +191,13 @@ class LeaveApplicationController extends Controller
         $isAdminFiling = $this->isAdmin($user) && $request->filled('employee_id');
 
         // Block VL applications filed less than 5 days before the leave start date
-        if ($config->code === 'VL' && !$request->boolean('is_paper_submission') && !$isAdminFiling) {
-            $daysUntilLeave = now()->startOfDay()->diffInDays(Carbon::parse($validated['start_date'])->startOfDay(), false);
+        // VL and WL must be filed at least 5 days before the start date
+        if (in_array($config->code, ['VL', 'WL'], true) && !$request->boolean('is_paper_submission') && !$isAdminFiling) {
+            $daysUntilLeave = Carbon::parse(now('Asia/Manila')->toDateString())->diffInDays(Carbon::parse($validated['start_date'])->startOfDay(), false);
 
             if ($daysUntilLeave < 5) {
                 return response()->json([
-                    'message' => 'Vacation Leave must be filed at least 5 days before the start date.'
+                    'message' => "{$config->name} must be filed at least 5 days before the start date."
                 ], 422);
             }
         }
