@@ -123,4 +123,10 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'seed_admin' => [
+        'username' => env('SEED_ADMIN_USERNAME'),
+        'password' => env('SEED_ADMIN_PASSWORD'),
+        'email'    => env('SEED_ADMIN_EMAIL'),
+    ],
+
 ];
