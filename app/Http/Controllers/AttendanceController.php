@@ -501,6 +501,7 @@ class AttendanceController extends Controller
                     'lwop_days'                 => $a->lwop_days,
                     'absent_with_leave_days'    => $a->absent_with_leave_days,
                     'absent_without_leave_days' => $a->absent_without_leave_days,
+                    'uploaded_at'               => $a->created_at?->toIso8601String(),
                 ];
             })
             ->sortByDesc('period')

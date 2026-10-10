@@ -749,7 +749,9 @@ class EmployeeController extends Controller
                 'used'        => round($origCredits, 3),
             ],
             [
-                'sort_date'   => $cancelled,
+                // Cancelled before the leave started: keep it right after the
+                // deduction so the running balance doesn't jump up first
+                'sort_date'   => $cancelled->lt($start) ? $start->copy() : $cancelled,
                 'period'      => $cancelled->format('M j, Y'),
                 'particulars' => ($fullCancel ? 'Cancelled' : 'Partially cancelled')
                     . " {$name}: {$num($daysReturned)} day(s) returned"
