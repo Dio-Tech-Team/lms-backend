@@ -118,36 +118,30 @@
         </table>
     </div>
     @php
-        // Merge vacation_leave and sick_leave into paired rows by period,
-        // preserving chronological order, so VL and SL sit side by side
-        // in one shared table like the physical leave card does.
-        $vlByPeriod = [];
-        foreach ($vacation_leave as $row)
-            $vlByPeriod[$row['period']][] = $row;
-
-        $slByPeriod = [];
-        foreach ($sick_leave as $row)
-            $slByPeriod[$row['period']][] = $row;
-
-        $orderedPeriods = [];
-        foreach (array_merge($vacation_leave, $sick_leave) as $row) {
-            if (!in_array($row['period'], $orderedPeriods)) {
-                $orderedPeriods[] = $row['period'];
-            }
-        }
-
+        // Walk both lists in the backend's order. A VL and an SL row share
+        // a line only when they are the same event (e.g. the transfer or a
+        // monthly credit); anything else gets its own line, so neither
+        // list is reordered and no particulars are hidden.
+        $vl = array_values($vacation_leave);
+        $sl = array_values($sick_leave);
+        $i = 0;
+        $j = 0;
         $mergedRows = [];
-        foreach ($orderedPeriods as $period) {
-            $vlRows = $vlByPeriod[$period] ?? [null];
-            $slRows = $slByPeriod[$period] ?? [null];
-            $max = max(count($vlRows), count($slRows));
 
-            for ($i = 0; $i < $max; $i++) {
-                $mergedRows[] = [
-                    'period' => $period,
-                    'vl' => $vlRows[$i] ?? null,
-                    'sl' => $slRows[$i] ?? null,
-                ];
+        while ($i < count($vl) || $j < count($sl)) {
+            $a = $vl[$i] ?? null;
+            $b = $sl[$j] ?? null;
+
+            if ($a && $b && $a['period'] === $b['period'] && $a['particulars'] === $b['particulars']) {
+                $mergedRows[] = ['period' => $a['period'], 'particulars' => $a['particulars'], 'vl' => $a, 'sl' => $b];
+                $i++;
+                $j++;
+            } elseif ($b === null || ($a && $a['sort_key'] <= $b['sort_key'])) {
+                $mergedRows[] = ['period' => $a['period'], 'particulars' => $a['particulars'], 'vl' => $a, 'sl' => null];
+                $i++;
+            } else {
+                $mergedRows[] = ['period' => $b['period'], 'particulars' => $b['particulars'], 'vl' => null, 'sl' => $b];
+                $j++;
             }
         }
     @endphp
@@ -177,7 +171,7 @@
             @forelse($mergedRows as $row)
                 <tr>
                     <td class="left">{{ $row['period'] }}</td>
-                    <td class="left">{{ $row['vl']['particulars'] ?? $row['sl']['particulars'] ?? '' }}</td>
+                    <td class="left">{{ $row['particulars'] }}</td>
                     <td class="num">
                         {{ isset($row['vl']) && $row['vl']['earned'] > 0 ? number_format($row['vl']['earned'], 3) : '' }}
                     </td>

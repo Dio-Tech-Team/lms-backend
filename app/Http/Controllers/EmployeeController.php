@@ -957,6 +957,20 @@ class EmployeeController extends Controller
                         'abs_wop'     => 0,
                         'used'        => 0,
                     ];
+
+
+                    // Leave filed after the transfer but dated before it (e.g. past
+                    // sick days) came out of the transferred balance, so list it
+                    // after the transfer row instead of above it
+                    foreach ($entries as &$e) {
+                        if (
+                            $e['particulars'] !== 'Transferred from physical leave card'
+                            && $e['sort_date']->lt($asOfDate)
+                        ) {
+                            $e['sort_date'] = $asOfDate->copy()->addSecond();
+                        }
+                    }
+                    unset($e);
                     // Anniversary credits after the transfer, plus DTR reductions (casual LWOP)
                     $accrualSum   = $accruals->sum(fn($a) => (float) ($type === 'vl' ? $a->vl_earned : $a->sl_earned));
                     $reductionSum = $attendanceRows->sum(fn($r) => (float) ($type === 'vl' ? $r->vl_earned : $r->sl_earned) - LeaveAccrualService::MONTHLY);
@@ -998,6 +1012,8 @@ class EmployeeController extends Controller
         foreach ($entries as &$entry) {
             $balance += $entry['earned'] - $entry['used'];
             $entry['balance'] = round($balance, 3);
+            // Kept for the PDF, which merges the VL and SL lists in this order
+            $entry['sort_key'] = Carbon::parse($entry['sort_date'])->format('Y-m-d H:i:s');
             unset($entry['sort_date']);
         }
 
