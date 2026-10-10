@@ -801,6 +801,15 @@ class LeaveApplicationController extends Controller
             $lwopRefund   = min($noPay, $refundDays);
             $creditRefund = round($refundDays - $lwopRefund, 3);
 
+            // Kept on the application so the leave card can show the restoration.
+            // Added to any earlier partial cancel of the same leave.
+            $creditsReturned = round(
+                (float) ($application->credits_returned ?? 0)
+                    + $creditRefund * (float) ($record->credit_factor ?? 1),
+                3
+            );
+            $lwopRemoved = round((float) ($application->lwop_removed ?? 0) + $lwopRefund, 3);
+
             if ($creditRefund > 0) {
                 $targetCode = $config->code === 'FL' ? 'VL' : $config->code;
                 $year = Carbon::parse($application->start_date)->year;
@@ -827,6 +836,8 @@ class LeaveApplicationController extends Controller
                     'cancelled_at'        => now(),
                     'original_end_date'     => $application->original_end_date ?? $application->end_date,
                     'original_days_applied' => $application->original_days_applied ?? $application->days_applied,
+                    'credits_returned'    => $creditsReturned,
+                    'lwop_removed'        => $lwopRemoved,
                 ]);
                 $record?->delete();
             } else {
@@ -838,6 +849,8 @@ class LeaveApplicationController extends Controller
                     'days_applied'        => $daysUsed,
                     'cancellation_reason' => $validated['reason'] ?? null,
                     'cancelled_at'        => now(),
+                    'credits_returned'    => $creditsReturned,
+                    'lwop_removed'        => $lwopRemoved,
                 ]);
                 $record?->update([
                     'end_date'    => $lastDay->toDateString(),

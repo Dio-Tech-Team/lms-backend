@@ -26,6 +26,8 @@ class LeaveApplication extends Model
         'cancelled_at',
         'original_end_date',
         'original_days_applied',
+        'credits_returned',
+        'lwop_removed',
 
     ];
 
@@ -38,6 +40,8 @@ class LeaveApplication extends Model
         'original_end_date'     => 'date',
         'original_days_applied' => 'decimal:3',
         'days_applied' => 'decimal:3',
+        'credits_returned' => 'decimal:3',
+        'lwop_removed'     => 'decimal:3',
     ];
 
     public function employee()

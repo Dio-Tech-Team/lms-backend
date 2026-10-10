@@ -30,6 +30,8 @@ return new class extends Migration
             $table->timestamp('cancelled_at')->nullable();
             $table->date('original_end_date')->nullable();
             $table->decimal('original_days_applied', 8, 3)->nullable();
+            $table->decimal('credits_returned', 8, 3)->nullable();
+            $table->decimal('lwop_removed', 8, 3)->nullable();
             $table->timestamps();
         });
     }

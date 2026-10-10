@@ -712,6 +712,55 @@ class EmployeeController extends Controller
         $label = "{$row->month} {$row->year} DTR";
         return $parts ? $label . ': ' . implode('; ', $parts) : $label;
     }
+
+    /**
+     * A cancelled approved leave as two card rows: the original deduction
+     * on the leave dates, then the restoration on the cancellation date.
+     * $rec is what remains after a partial cancel, or null after a full one.
+     */
+    private function cancelledLeaveRows(LeaveApplication $app, ?LeaveRecord $rec): array
+    {
+        $num = fn($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.');
+
+        $origDays    = (float) ($app->original_days_applied ?? $app->days_applied);
+        $origEnd     = Carbon::parse($app->original_end_date ?? $app->end_date);
+        $keptLwop    = (float) ($rec->no_pay_days ?? 0);
+        $keptCredits = $rec
+            ? ((float) $rec->days_taken - $keptLwop) * (float) ($rec->credit_factor ?? 1)
+            : 0;
+
+        $origLwop    = $keptLwop + (float) $app->lwop_removed;
+        $origCredits = $keptCredits + (float) $app->credits_returned;
+
+        $fullCancel   = $app->status === 'cancelled';
+        $daysReturned = $fullCancel ? $origDays : $origDays - (float) $app->days_applied;
+
+        $name      = $app->leaveConfiguration->name;
+        $start     = Carbon::parse($app->start_date);
+        $cancelled = Carbon::parse($app->cancelled_at)->timezone('Asia/Manila');
+        return [
+            [
+                'sort_date'   => $start,
+                'period'      => $start->format('M j, Y') . ' to ' . $origEnd->format('M j, Y'),
+                'particulars' => "{$name} taken",
+                'earned'      => 0,
+                'abs_wp'      => round($origDays - $origLwop, 3),
+                'abs_wop'     => round($origLwop, 3),
+                'used'        => round($origCredits, 3),
+            ],
+            [
+                'sort_date'   => $cancelled,
+                'period'      => $cancelled->format('M j, Y'),
+                'particulars' => ($fullCancel ? 'Cancelled' : 'Partially cancelled')
+                    . " {$name}: {$num($daysReturned)} day(s) returned"
+                    . ((float) $app->lwop_removed > 0 ? " ({$num($app->lwop_removed)} LWOP removed)" : ''),
+                'earned'      => round((float) $app->credits_returned, 3),
+                'abs_wp'      => 0,
+                'abs_wop'     => 0,
+                'used'        => 0,
+            ],
+        ];
+    }
     private function buildLeaveCardForType(Employee $employee, ?LeaveConfiguration $config, string $type, int $year, array $deductionConfigIds = []): array
     {
         $entries = [];
@@ -789,8 +838,24 @@ class EmployeeController extends Controller
                 ->whereYear('start_date', $year)
                 ->with('leaveConfiguration:id,name')
                 ->get();
+            // Approved leaves later cancelled (fully or partly) through cancelApproved()
+            $cancelledApps = LeaveApplication::where('employee_id', $employee->id)
+                ->whereIn('leave_configuration_id', $recordConfigIds)
+                ->whereNotNull('cancelled_at')
+                ->whereNotNull('credits_returned')
+                ->whereYear('start_date', $year)
+                ->with('leaveConfiguration:id,name')
+                ->get()
+                ->keyBy('id');
+            $handled = [];
 
             foreach ($leaveRecords as $rec) {
+                $app = $rec->leave_application_id ? $cancelledApps->get($rec->leave_application_id) : null;
+                if ($app) {
+                    array_push($entries, ...$this->cancelledLeaveRows($app, $rec));
+                    $handled[] = $app->id;
+                    continue;
+                }
                 $start   = \Carbon\Carbon::parse($rec->start_date);
                 $end     = \Carbon\Carbon::parse($rec->end_date);
                 $withPay = (float) $rec->days_taken - (float) $rec->no_pay_days;
@@ -811,6 +876,13 @@ class EmployeeController extends Controller
                     // W/P shows days; USED shows credits actually deducted
                     'used'        => round($withPay * (float) ($rec->credit_factor ?? 1), 3),
                 ];
+            }
+
+            // Fully cancelled leaves have no record left
+            foreach ($cancelledApps as $app) {
+                if ($app->status === 'cancelled' && !in_array($app->id, $handled, true)) {
+                    array_push($entries, ...$this->cancelledLeaveRows($app, null));
+                }
             }
             // Personal slips deduct VL only
             if ($type === 'vl') {
