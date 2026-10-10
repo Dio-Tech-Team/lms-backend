@@ -127,7 +127,8 @@ class LeaveCreditController extends Controller
                     if ($config->code === 'VL') {
                         $employedFullPreviousYear = Carbon::parse($employee->date_hired)
                             ->lte(Carbon::create($previousYear, 1, 1));
-                        if ($employedFullPreviousYear) {
+                        // Forced leave only applies to employees with 10+ VL (CSC)
+                        if ($employedFullPreviousYear && (float) $startingCredits >= 10) {
                             $flConfig = LeaveConfiguration::where('code', 'FL')->first();
                             if ($flConfig) {
                                 $flShortfall = max(0, 5 - self::flDaysTaken((int) $employeeId, $previousYear));
@@ -220,7 +221,8 @@ class LeaveCreditController extends Controller
                     if ($config->code === 'VL' && $flConfig) {
                         $employedFullPreviousYear = Carbon::parse($employee->date_hired)
                             ->lte(Carbon::create($previousYear, 1, 1));
-                        if ($employedFullPreviousYear) {
+                        // Forced leave only applies to employees with 10+ VL (CSC)
+                        if ($employedFullPreviousYear && (float) $startingCredits >= 10) {
                             $flShortfall = max(0, 5 - self::flDaysTaken($employee->id, $previousYear));
                             $startingCredits = max(0, $startingCredits - $flShortfall);
                         }
