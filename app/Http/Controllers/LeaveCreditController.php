@@ -388,8 +388,18 @@ class LeaveCreditController extends Controller
             'remaining_balance' => 'sometimes|numeric|min:0',
         ]);
 
-        $credit = LeaveCredit::where('employee_id', $employeeId)
+        $credit = LeaveCredit::with('leaveConfiguration:id,code')
+            ->where('employee_id', $employeeId)
             ->findOrFail($creditId);
+
+        // Job Order personnel only have Wellness Leave
+        $employee = Employee::findOrFail($employeeId);
+        if ($employee->employment_status === 'job_order' && $credit->leaveConfiguration?->code !== 'WL') {
+            return response()->json([
+                'message' => 'Job Order personnel are only eligible for Wellness Leave.',
+            ], 422);
+        }
+
 
         // First-ever manual credit set on an untouched row = the opening balance
         if (isset($validated['total_credits']) && (float) $credit->used_credits === 0.0 && (float) $credit->opening_balance === 0.0) {
@@ -452,6 +462,10 @@ class LeaveCreditController extends Controller
                 'leave_credits.remaining_balance'
             )
             ->get();
+        // Job Order personnel only have Wellness Leave
+        if ($employee->employment_status === 'job_order') {
+            $balances = $balances->where('code', 'WL')->values();
+        }
 
         // FL deducts from VL. Override its row with the cap-based figure so
         // mobile's generic "days > remainingBalance" check works.
