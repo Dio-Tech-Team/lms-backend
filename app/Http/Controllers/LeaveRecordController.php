@@ -237,30 +237,33 @@ class LeaveRecordController extends Controller
 
     public function destroy(string $id)
     {
-        $record = LeaveRecord::select([
-            'id',
-            'employee_id',
-            'leave_configuration_id',
-            'days_taken',
-            'no_pay_days'
-        ])->findOrFail($id);
+        $record = LeaveRecord::with('leaveConfiguration:id,code')->findOrFail($id);
 
         DB::transaction(function () use ($record) {
+            // FL is deducted from VL, so the refund goes back to VL
+            $code = $record->leaveConfiguration?->code;
+            $targetCode = $code === 'FL' ? 'VL' : $code;
+            $year = \Carbon\Carbon::parse($record->start_date)->year;
 
             $credit = LeaveCredit::where('employee_id', $record->employee_id)
-                ->where('leave_configuration_id', $record->leave_configuration_id)
-                ->where('year', now()->year)
+                ->whereHas('leaveConfiguration', fn($q) => $q->where('code', $targetCode))
+                ->where('year', $year)
+                ->lockForUpdate()
                 ->first();
 
             if ($credit) {
-                $coveredDays = $record->days_taken - $record->no_pay_days;
-                $credit->decrement('used_credits', $coveredDays);
-                $credit->update(['last_updated' => now()]);
-                $credit->save();
+                // Only the paid days touched the balance, at the rate they were deducted
+                $paidDays = (float) $record->days_taken - (float) $record->no_pay_days;
+                $refund   = round($paidDays * (float) ($record->credit_factor ?? 1), 3);
+
+                $credit->used_credits = max(0, (float) $credit->used_credits - $refund);
+                $credit->last_updated = now();
+                $credit->save(); // recomputes remaining_balance + carry-over
             }
 
             $record->delete();
         });
+
         ActivityLog::create([
             'user_id'      => request()->user()->id,
             'action'       => 'leave_record.deleted',
@@ -268,6 +271,7 @@ class LeaveRecordController extends Controller
             'subject_type' => 'LeaveRecord',
             'subject_id'   => $record->id,
         ]);
+
         return response()->json(['message' => 'Leave record deleted successfully']);
     }
 }

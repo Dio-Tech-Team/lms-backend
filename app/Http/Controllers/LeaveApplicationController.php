@@ -259,10 +259,8 @@ class LeaveApplicationController extends Controller
         }
         if ($config->code === 'FL') {
             // Cap: max 5 days of FL per calendar year, across all applications
-            $flDaysAlreadyTaken = LeaveRecord::where('employee_id', $employee->id)
-                ->where('leave_configuration_id', $config->id)
-                ->whereYear('start_date', $year)
-                ->sum('days_taken');
+            // Includes days taken on paper before go-live
+            $flDaysAlreadyTaken = LeaveCreditController::flDaysTaken($employee->id, $year);
 
             if ($flDaysAlreadyTaken + $validated['days_applied'] > 5) {
                 return response()->json([

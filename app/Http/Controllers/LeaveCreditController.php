@@ -14,17 +14,35 @@ use Carbon\Carbon;
 
 class LeaveCreditController extends Controller
 {
+    /**
+     * FL days taken in a year: filed FL records plus days taken on paper
+     * before go-live, which HR enters as used_credits on FL's own row.
+     */
+    public static function flDaysTaken(int $employeeId, int $year): float
+    {
+        $flConfig = LeaveConfiguration::where('code', 'FL')->first();
+        if (!$flConfig) return 0;
+
+        $filed = LeaveRecord::where('employee_id', $employeeId)
+            ->where('leave_configuration_id', $flConfig->id)
+            ->whereYear('start_date', $year)
+            ->sum('days_taken');
+
+        $paper = LeaveCredit::where('employee_id', $employeeId)
+            ->where('leave_configuration_id', $flConfig->id)
+            ->where('year', $year)
+            ->value('used_credits');
+
+        return (float) $filed + (float) $paper;
+    }
+
     public function index(Request $request, $employeeId)
     {
-
         $year = (int) $request->input('year', now()->year);
 
-        // OPTIMIZED: INNER JOIN instead of two separate queries
-        // Fixed: last_name → surname bug
         $employee = Employee::findOrFail($employeeId);
         app(LeaveAccrualService::class)->accrueForEmployee($employee);
 
-        // OPTIMIZED: INNER JOIN for leaveConfiguration (always exists)
         $credits = LeaveCredit::select([
             'leave_credits.id',
             'leave_credits.total_credits',
@@ -36,30 +54,18 @@ class LeaveCreditController extends Controller
         ])
             ->join('leave_configurations', 'leave_credits.leave_configuration_id', '=', 'leave_configurations.id')
             ->where('leave_credits.employee_id', $employeeId)
-            // ->where('leave_credits.year', now()->year) // uses year index!
-            // ->where('leave_credits.year', $request->input('year', now()->year))
-            ->where('leave_credits.year', $year) // uses year index!
+            ->where('leave_credits.year', $year)
             ->get();
 
-        // Attach FL usage-this-year, since FL's own credit row is just a 0/0/0 placeholder
+        // FL deducts from VL; its own row only holds paper days entered by HR
         $flCredit = $credits->firstWhere('code', 'FL');
         if ($flCredit) {
-            $flConfig = LeaveConfiguration::where('code', 'FL')->first();
-            $flDaysTaken = $flConfig
-                ? LeaveRecord::where('employee_id', $employeeId)
-                ->where('leave_configuration_id', $flConfig->id)
-                // ->whereYear('start_date', now()->year)
-                ->whereYear('start_date', $year)
-                ->sum('days_taken')
-                : 0;
-
-            $flCredit->fl_days_taken = (float) $flDaysTaken;
+            $flCredit->fl_days_taken = self::flDaysTaken((int) $employeeId, $year);
             $flCredit->fl_days_cap = 5;
         }
 
         return response()->json([
             'employee' => $employee->first_name . ' ' . $employee->surname,
-            // 'year'     => now()->year,
             'year'     => $year,
             'credits'  => $credits,
         ]);
@@ -71,65 +77,45 @@ class LeaveCreditController extends Controller
         $previousYear = $targetYear - 1;
 
         $employee = Employee::findOrFail($employeeId);
-        // $configs = LeaveConfiguration::all();
-        // To this:
         $configs = LeaveConfiguration::where('is_active', true)->get();
-        $now = now()->toDateTimeString(); // FIXED: Safe string for raw batch inserts
+        $now = now()->toDateTimeString();
 
         $creditsToInsert = [];
 
-        // Filter configurations based on employee status and statutory rules
         $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
-            // 1. JO SPECIAL CASE: Only Wellness (WL) is allowed for Job Orders
+            // Job Orders only get Wellness
             if ($employee->employment_status === 'job_order') {
                 return $config->code === 'WL';
             }
-            // 2. Skip event-triggered leave types — these are granted manually by HR, not auto-initialized
+            // Event-triggered leave types are granted manually by HR
             if ($config->grant_type === 'event_manual') {
                 return false;
             }
-            // // 3. SEX-BASED ELIGIBILITY GUARD
-            // $femaleOnly = ['ML', 'VAWC', 'SLB', 'STL']; // Adjust codes as per your DB
-            // $maleOnly   = ['PTL'];
 
-            // $sex = strtolower($employee->sex ?? '');
-
-            // if (in_array($config->code, $femaleOnly) && $sex !== 'female') {
-            //     return false;
-            // }
-            // if (in_array($config->code, $maleOnly) && $sex !== 'male') {
-            //     return false;
-            // }
-
-            // Replace line 66 with this block:
             $appTo = $config->application_to;
             $allowedStatuses = is_array($appTo) ? $appTo : (json_decode($appTo, true) ?? []);
 
             return in_array('all', $allowedStatuses) || in_array($employee->employment_status, $allowedStatuses);
-            // return in_array('all', $config->application_to) || in_array($employee->employment_status, $config->application_to);
         });
 
-        // OPTIMIZED: Get existing credits for this single employee to prevent loop queries
         $existingCreditIds = LeaveCredit::where('employee_id', $employeeId)
             ->where('year', $targetYear)
             ->pluck('leave_configuration_id')
             ->toArray();
 
         foreach ($eligibleConfigs as $config) {
-            // Check in-memory array instead of hitting DB inside the loop
             if (!in_array($config->id, $existingCreditIds)) {
                 $startingCredits = 0;
 
-                // Fixed Leaves (WL, FL, SPL)
+                // Fixed leaves (WL, FL, SPL)
                 if ($config->credit_type === 'fixed') {
                     $startingCredits = $config->fixed_days ?? 0;
 
-                    // SPECIAL OVERRIDE: If it's Wellness for a JO, force the 3 days
                     if ($config->code === 'WL' && $employee->employment_status === 'job_order') {
                         $startingCredits = 5;
                     }
                 }
-                // Monthly Accumulating Leaves (VL, SL) -> Carry over check
+                // Accumulating leaves (VL, SL): carry over
                 else if ($config->can_carry_over) {
                     $previousRecord = LeaveCredit::where('employee_id', $employeeId)
                         ->where('leave_configuration_id', $config->id)
@@ -137,22 +123,20 @@ class LeaveCreditController extends Controller
                         ->first();
 
                     $startingCredits = $previousRecord ? $previousRecord->remaining_balance : 0;
+
                     if ($config->code === 'VL') {
                         $employedFullPreviousYear = Carbon::parse($employee->date_hired)
                             ->lte(Carbon::create($previousYear, 1, 1));
                         if ($employedFullPreviousYear) {
                             $flConfig = LeaveConfiguration::where('code', 'FL')->first();
                             if ($flConfig) {
-                                $flDaysTaken = \App\Models\LeaveRecord::where('employee_id', $employeeId)
-                                    ->where('leave_configuration_id', $flConfig->id)
-                                    ->whereYear('start_date', $previousYear)
-                                    ->sum('days_taken');
-                                $flShortfall = max(0, 5 - $flDaysTaken);
+                                $flShortfall = max(0, 5 - self::flDaysTaken((int) $employeeId, $previousYear));
                                 $startingCredits = max(0, $startingCredits - $flShortfall);
                             }
                         }
                     }
                 }
+
                 $creditsToInsert[] = [
                     'employee_id'            => $employeeId,
                     'leave_configuration_id' => $config->id,
@@ -174,128 +158,6 @@ class LeaveCreditController extends Controller
         return true;
     }
 
-    // public function initializeAllCredits(Request $request)
-    // {
-    //     $targetYear = $request->input('year', now()->year);
-    //     $previousYear = $targetYear - 1;
-
-    //     $employees = Employee::where('is_active', true)->get();
-
-    //     $configs = LeaveConfiguration::where('is_active', true)->get();
-    //     $now = now()->toDateTimeString();
-
-    //     $existingCreditsMap = LeaveCredit::where('year', $targetYear)
-    //         ->select('employee_id', 'leave_configuration_id')
-    //         ->get()
-    //         ->groupBy('employee_id')
-    //         ->map(function ($items) {
-    //             return $items->pluck('leave_configuration_id')->toArray();
-    //         })
-    //         ->toArray();
-
-    //     $previousBalancesMap = LeaveCredit::where('year', $previousYear)
-    //         ->select('employee_id', 'leave_configuration_id', 'remaining_balance')
-    //         ->get()
-    //         ->groupBy('employee_id')
-    //         ->map(function ($items) {
-    //             return $items->keyBy('leave_configuration_id')->map->remaining_balance->toArray();
-    //         })
-    //         ->toArray();
-
-    //     $creditsToInsert = [];
-    //     $initializedCount = 0;
-
-    //     $flConfig = LeaveConfiguration::where('code', 'FL')->first();
-    //     foreach ($employees as $employee) {
-
-    //         $eligibleConfigs = $configs->filter(function ($config) use ($employee) {
-
-    //             if ($employee->employment_status === 'job_order') {
-    //                 return $config->code === 'WL';
-    //             }
-    //             if ($config->grant_type === 'event_manual') {
-    //                 return false;
-    //             }
-
-    //             return in_array('all', $config->application_to) ||
-    //                 in_array($employee->employment_status, $config->application_to);
-    //         });
-
-    //         $employeeExistingConfigs = $existingCreditsMap[$employee->id] ?? [];
-
-    //         $rowsBefore = count($creditsToInsert);
-
-    //         foreach ($eligibleConfigs as $config) {
-    //             if (!in_array($config->id, $employeeExistingConfigs)) {
-    //                 $startingCredits = 0;
-
-    //                 if ($config->credit_type === 'fixed') {
-    //                     $startingCredits = $config->fixed_days ?? 0;
-
-    //                     if ($config->code === 'WL' && $employee->employment_status === 'job_order') {
-    //                         $startingCredits = 5;
-    //                     }
-    //                 } else if ($config->can_carry_over) {
-    //                     $startingCredits = $previousBalancesMap[$employee->id][$config->id] ?? 0;
-    //                     if ($config->code === 'VL') {
-    //                         $employedFullPreviousYear = Carbon::parse($employee->date_hired)
-    //                             ->lte(Carbon::create($previousYear, 1, 1));
-    //                         if ($employedFullPreviousYear) {
-    //                             if ($flConfig) {
-    //                                 $flDaysTaken = \App\Models\LeaveRecord::where('employee_id', $employee->id)
-    //                                     ->where('leave_configuration_id', $flConfig->id)
-    //                                     ->whereYear('start_date', $previousYear)
-    //                                     ->sum('days_taken');
-    //                                 $flShortfall = max(0, 5 - $flDaysTaken);
-    //                                 $startingCredits = max(0, $startingCredits - $flShortfall);
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-
-    //                 $creditsToInsert[] = [
-    //                     'employee_id'            => $employee->id,
-    //                     'leave_configuration_id' => $config->id,
-    //                     'year'                   => $targetYear,
-    //                     'total_credits'          => $startingCredits,
-    //                     'used_credits'           => 0,
-    //                     'remaining_balance'      => $startingCredits,
-    //                     'last_updated'           => $now,
-    //                     'created_at'             => $now,
-    //                     'updated_at'             => $now,
-    //                 ];
-    //             }
-    //         }
-
-    //         if (count($creditsToInsert) > $rowsBefore) {
-    //             $initializedCount++;
-    //         }
-    //     }
-
-    //     if (!empty($creditsToInsert)) {
-    //         foreach (array_chunk($creditsToInsert, 500) as $chunk) {
-    //             LeaveCredit::insert($chunk);
-    //         }
-    //     }
-    //     ActivityLog::create([
-    //         'user_id'      => $request->user()->id,
-    //         'action'       => 'leave_credits.initialized_all',
-    //         'description'  => "Initialized leave credits for all active employees — year {$targetYear} (" . count($creditsToInsert) . " records created)",
-    //         'subject_type' => 'LeaveCredit',
-    //         'subject_id'   => null,
-    //     ]);
-
-    //     $skippedCount = $employees->count() - $initializedCount;
-
-    //     $message = $initializedCount === 0
-    //         ? "All active employees already have leave credits for {$targetYear}. Nothing was changed."
-    //         : "Initialized leave credits for {$initializedCount} employee(s) for {$targetYear}."
-    //         . ($skippedCount > 0 ? " {$skippedCount} already had credits and were skipped." : '');
-
-    //     return response()->json([
-    //         'message' => $message,
-    //     ]);
-    // }
     /**
      * Shared by the manual Initialize Credits page and the Dashboard
      * auto-run. Idempotent — employees who already have credits for
@@ -359,11 +221,7 @@ class LeaveCreditController extends Controller
                         $employedFullPreviousYear = Carbon::parse($employee->date_hired)
                             ->lte(Carbon::create($previousYear, 1, 1));
                         if ($employedFullPreviousYear) {
-                            $flDaysTaken = LeaveRecord::where('employee_id', $employee->id)
-                                ->where('leave_configuration_id', $flConfig->id)
-                                ->whereYear('start_date', $previousYear)
-                                ->sum('days_taken');
-                            $flShortfall = max(0, 5 - $flDaysTaken);
+                            $flShortfall = max(0, 5 - self::flDaysTaken($employee->id, $previousYear));
                             $startingCredits = max(0, $startingCredits - $flShortfall);
                         }
                     }
@@ -392,7 +250,6 @@ class LeaveCreditController extends Controller
                 LeaveCredit::insert($chunk);
             }
 
-            // Only log when something was actually created
             ActivityLog::create([
                 'user_id'      => $userId,
                 'action'       => 'leave_credits.initialized_all',
@@ -422,6 +279,7 @@ class LeaveCreditController extends Controller
 
         return response()->json(['message' => $message]);
     }
+
     public function grantLeave(Request $request)
     {
         $user = $request->user();
@@ -469,12 +327,6 @@ class LeaveCreditController extends Controller
 
         $days = $validated['days'] ?? $config->fixed_days;
 
-        // if ($config->code === 'ML' && $employee->sex === 'male' && !isset($validated['days'])) {
-        //     return response()->json([
-        //         'message' => 'Please specify the number of days allocated for this employee.'
-        //     ], 422);
-        // }
-
         if ($days === null) {
             return response()->json([
                 'message' => "{$config->name} has no default day amount configured — please specify 'days' explicitly."
@@ -520,7 +372,7 @@ class LeaveCreditController extends Controller
             'data'    => $credit,
         ], 201);
     }
-    // LeaveCreditController.php
+
     public function initializeCredits(Request $request, $employeeId)
     {
         $this->initializeSingleEmployeeCredits($employeeId, $request->input('year', now()->year));
@@ -539,20 +391,13 @@ class LeaveCreditController extends Controller
         $credit = LeaveCredit::where('employee_id', $employeeId)
             ->findOrFail($creditId);
 
-        // OPTIMIZED & FIXED: Auto-calculate remaining balance logically if total or used change
-        $total = $validated['total_credits'] ?? $credit->total_credits;
-        $used = $validated['used_credits'] ?? $credit->used_credits;
-
-        // First-ever manual credit set on an untouched row = treat as the opening balance
-        // if (isset($validated['total_credits']) && (float) $credit->used_credits === 0.0 && (float) $credit->opening_balance === 0.0) {
-        //     $validated['opening_balance'] = $validated['total_credits'];
-        // }
-
+        // First-ever manual credit set on an untouched row = the opening balance
         if (isset($validated['total_credits']) && (float) $credit->used_credits === 0.0 && (float) $credit->opening_balance === 0.0) {
             $validated['opening_balance'] = $validated['total_credits'];
             // The day the paper card balance was entered into the system
             $validated['opening_balance_date'] = now()->toDateString();
         }
+
         $total = $validated['total_credits'] ?? $credit->total_credits;
         $used = $validated['used_credits'] ?? $credit->used_credits;
 
@@ -560,6 +405,7 @@ class LeaveCreditController extends Controller
         $validated['last_updated'] = now();
 
         $credit->update($validated);
+
         ActivityLog::create([
             'user_id'      => $request->user()->id,
             'action'       => 'leave_credit.updated',
@@ -582,29 +428,7 @@ class LeaveCreditController extends Controller
         ]);
     }
 
-    //Mobile
-    // public function getLeaveCreditBalances(Request $request)
-    // {
-    //     $employee = $request->user()->employee;
-
-    //     if (!$employee) {
-    //         return response()->json(['message' => 'Employee profile not found'], 404);
-    //     }
-
-    //     $balances = LeaveCredit::join('leave_configurations', 'leave_credits.leave_configuration_id', '=', 'leave_configurations.id')
-    //         ->where('leave_credits.employee_id', $employee->id)
-    //         ->where('leave_credits.year', now()->year)
-    //         ->where('leave_configurations.is_active', true)
-    //         ->select(
-    //             'leave_configurations.id as leave_configuration_id',
-    //             'leave_configurations.name',
-    //             'leave_configurations.code',
-    //             'leave_credits.remaining_balance'
-    //         )
-    //         ->get();
-
-    //     return response()->json($balances);
-    // }
+    // Mobile
     public function getLeaveCreditBalances(Request $request)
     {
         $employee = $request->user()->employee;
@@ -629,17 +453,11 @@ class LeaveCreditController extends Controller
             )
             ->get();
 
-        // FL usage lives on VL, not on FL's own placeholder credit row —
-        // override remaining_balance with the real cap-based figure so
-        // mobile's generic "days > remainingBalance" check works correctly.
+        // FL deducts from VL. Override its row with the cap-based figure so
+        // mobile's generic "days > remainingBalance" check works.
         $flRow = $balances->firstWhere('code', 'FL');
         if ($flRow) {
-            $flConfig = \App\Models\LeaveConfiguration::where('code', 'FL')->first();
-            $flDaysTaken = \App\Models\LeaveRecord::where('employee_id', $employee->id)
-                ->where('leave_configuration_id', $flConfig->id)
-                ->whereYear('start_date', now()->year)
-                ->sum('days_taken');
-
+            $flDaysTaken = self::flDaysTaken($employee->id, now()->year);
             $flRow->total_credits     = 5;
             $flRow->used_credits      = $flDaysTaken;
             $flRow->remaining_balance = max(0, 5 - $flDaysTaken);
