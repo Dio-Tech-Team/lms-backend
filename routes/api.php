@@ -170,7 +170,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     // 4. SUPER ADMIN ONLY ROUTES — account management and audit trail
     Route::middleware('role:super_admin')->group(function () {
         // Account Management
-        Route::apiResource('users', UserController::class)->only(['index', 'store', 'destroy']);
+        Route::apiResource('users', UserController::class)->only(['index', 'store', 'update', 'destroy']);
         Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword']);
 
         // Activity Logs

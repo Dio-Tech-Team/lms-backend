@@ -54,6 +54,43 @@ class UserController extends Controller
         ], 201);
     }
 
+    // Fix a mistyped username or email. Email stays optional.
+    public function update(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'username' => ['required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($user->id)],
+            'email'    => ['nullable', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+        ]);
+
+        $changes = [];
+        if ($validated['username'] !== $user->username) {
+            $changes[] = "username {$user->username} → {$validated['username']}";
+        }
+        if (($validated['email'] ?? null) !== $user->email) {
+            $changes[] = 'email ' . ($user->email ?: 'none') . ' → ' . ($validated['email'] ?? 'none');
+        }
+
+        $user->update([
+            'username' => $validated['username'],
+            'email'    => $validated['email'] ?? null,
+        ]);
+
+        if ($changes) {
+            ActivityLog::create([
+                'user_id'      => $request->user()->id,
+                'action'       => 'user.updated',
+                'description'  => "Updated account {$user->username}: " . implode('; ', $changes),
+                'subject_type' => 'User',
+                'subject_id'   => $user->id,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Account updated.',
+            'user'    => $user->only(['id', 'username', 'email', 'role']),
+        ]);
+    }
+
     // Delete an account. Blocks deleting the currently logged-in user.
 
     public function destroy(User $user, Request $request)
