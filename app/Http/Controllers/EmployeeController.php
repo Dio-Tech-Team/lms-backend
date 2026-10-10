@@ -1003,6 +1003,65 @@ class EmployeeController extends Controller
 
         return $entries;
     }
+
+    /**
+     * Switch active employees to a work schedule in one go. dry_run returns
+     * who would change, so HR can untick employees who keep their schedule
+     * (some departments mix 4-day and 5-day staff). Approved leaves keep
+     * their stored credit_factor; pending ones are recounted on approval.
+     */
+    public function bulkSchedule(Request $request)
+    {
+        $validated = $request->validate([
+            'schedule_type'  => 'required|in:4day,5day',
+            'department_id'  => 'nullable|exists:departments,id',
+            'employee_ids'   => 'nullable|array',
+            'employee_ids.*' => 'integer|exists:employees,id',
+            'dry_run'        => 'nullable|boolean',
+        ]);
+
+        // Active employees not yet on the chosen schedule
+        $query = Employee::where('is_active', true)
+            ->where(fn($q) => $q->where('schedule_type', '!=', $validated['schedule_type'])
+                ->orWhereNull('schedule_type'))
+            ->when($validated['department_id'] ?? null, fn($q, $d) => $q->where('department_id', $d));
+
+        if ($request->boolean('dry_run')) {
+            $employees = $query->with('department:id,name')
+                ->orderBy('surname')
+                ->orderBy('first_name')
+                ->get(['id', 'first_name', 'surname', 'department_id'])
+                ->map(fn($e) => [
+                    'id'         => $e->id,
+                    'name'       => "{$e->surname}, {$e->first_name}",
+                    'department' => $e->department?->name,
+                ]);
+
+            return response()->json(['employees' => $employees]);
+        }
+
+        // Only the employees HR left ticked
+        if ($request->has('employee_ids')) {
+            $query->whereIn('id', $validated['employee_ids'] ?? []);
+        }
+
+        $count = $query->update(['schedule_type' => $validated['schedule_type']]);
+
+        $label = $validated['schedule_type'] === '5day' ? '5-day (Mon–Fri)' : '4-day (Mon–Thu)';
+
+        ActivityLog::create([
+            'user_id'      => $request->user()->id,
+            'action'       => 'employee.schedule_bulk_updated',
+            'description'  => "Changed work schedule to {$label} for {$count} employee(s)",
+            'subject_type' => 'Employee',
+            'subject_id'   => null,
+        ]);
+
+        return response()->json([
+            'message' => "{$count} employee(s) switched to the {$label} schedule.",
+            'updated' => $count,
+        ]);
+    }
     public function stepIncrementForecast(Request $request)
     {
         $request->validate([
