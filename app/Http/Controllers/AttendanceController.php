@@ -201,15 +201,17 @@ class AttendanceController extends Controller
 
                         //tp
                         $this->updateLeaveCredits($employee, $month, $year, $computation, $request->user()->id, $attendance);
-
                         $results[] = [
                             'sheet'              => $sheetName,
                             'employee'           => $employee->first_name . ' ' . $employee->surname,
-                            // 'lwop_days'          => $absentWithoutLeaveDays,
-                            'lwop_days'          => $employee->employment_status === 'casual' ? $absentWithoutLeaveDays : 0,
-                            'vl_earned'          => $computation['vl_earned'],
-                            'sl_earned'          => $computation['sl_earned'],
+                            'absent_days'        => $absentWithoutLeaveDays,
+                            // Read back from the record: updateLeaveCredits() may have
+                            // recomputed the earning after charging absences to VL
+                            'vl_earned'          => (float) $attendance->vl_earned,
+                            'absence_credits'    => (float) $attendance->absence_credits,
+                            'absence_lwop'       => (float) $attendance->absence_lwop_days,
                             'tardiness_deducted' => $computation['tardiness_equivalent_days'],
+                            'tardiness_lwop'     => (float) ($attendance->lwop_days ?? 0),
                         ];
                     }
                 }
@@ -352,14 +354,47 @@ class AttendanceController extends Controller
                 ['total_credits' => 0, 'used_credits' => 0, 'remaining_balance' => 0]
             );
 
-            // Base 1.250 is posted on the hiring-date anniversary by LeaveAccrualService.
-            // The DTR only applies the casual-LWOP reduction (0 for everyone else).
+            // 1. Absences without leave are charged to VL at the employee's
+            //    rate; only what the balance can't cover stays unpaid (LWOP)
+            $absentDays = (float) $attendance->absent_without_leave_days;
+            if ($absentDays > 0) {
+                $factor = $employee->schedule_type === '5day' ? 1.0 : 1.25;
+                $owed   = round($absentDays * $factor, 3);
+                $unmet  = $vlCredit->deductLeave($owed);
+
+                $attendance->absence_credits   = round($owed - $unmet, 3);
+                $attendance->absence_lwop_days = round($unmet / $factor, 3);
+
+                // A day paid from VL isn't LWOP, so a casual's earning only
+                // drops for the days that stayed unpaid
+                $recomputed = $this->computationService->computeMonthlyCredits([
+                    'month'                     => $month,
+                    'year'                      => $year,
+                    'employment_status'         => $employee->employment_status,
+                    'absent_with_leave_days'    => (float) $attendance->absent_with_leave_days,
+                    'absent_without_leave_days' => (float) $attendance->absence_lwop_days,
+                    'late_am_minutes'           => (int) $attendance->late_am_minutes,
+                    'late_pm_minutes'           => (int) $attendance->late_pm_minutes,
+                    'undertime_am_minutes'      => (int) $attendance->undertime_am_minutes,
+                    'undertime_pm_minutes'      => (int) $attendance->undertime_pm_minutes,
+                ]);
+                $computation['vl_earned'] = $recomputed['vl_earned'];
+                $computation['sl_earned'] = $recomputed['sl_earned'];
+
+                $attendance->vl_earned = $computation['vl_earned'];
+                $attendance->sl_earned = $computation['sl_earned'];
+                $attendance->save();
+            }
+
+            // 2. Base 1.250 is posted on the hiring-date anniversary by
+            //    LeaveAccrualService. The DTR only applies the casual-LWOP
+            //    reduction (0 for everyone else).
             $vlCredit->total_credits = round((float) $vlCredit->total_credits
                 + ($computation['vl_earned'] - LeaveAccrualService::MONTHLY), 3);
             $vlCredit->last_updated = now();
             $vlCredit->save();
 
-            // Tardiness deducted through deductLeave() so it's capped at whatever balance exists
+            // 3. Tardiness, capped at whatever VL is left after the absences
             $tardinessDays = $computation['tardiness_equivalent_days'];
             if ($tardinessDays > 0) {
                 $unmetDays = $vlCredit->deductLeave($tardinessDays);
@@ -423,8 +458,9 @@ class AttendanceController extends Controller
                 // Only the portion the balance actually absorbed was added to
                 // used_credits — the rest became LWOP and never touched it.
                 $absorbed = (float) $attendance->tardiness_equivalent_days
-                    - (float) ($attendance->lwop_days ?? 0);
-
+                    - (float) ($attendance->lwop_days ?? 0)
+                    // Absences charged to VL at upload
+                    + (float) ($attendance->absence_credits ?? 0);
                 // Undo only the LWOP reduction — the anniversary accrual stays
                 $vlCredit->total_credits = round((float) $vlCredit->total_credits
                     + (LeaveAccrualService::MONTHLY - (float) $attendance->vl_earned), 3);
@@ -502,6 +538,8 @@ class AttendanceController extends Controller
                     'absent_with_leave_days'    => $a->absent_with_leave_days,
                     'absent_without_leave_days' => $a->absent_without_leave_days,
                     'uploaded_at'               => $a->created_at?->toIso8601String(),
+                    'absence_credits'           => $a->absence_credits,
+                    'absence_lwop_days'         => $a->absence_lwop_days,
                 ];
             })
             ->sortByDesc('period')

@@ -690,10 +690,21 @@ class EmployeeController extends Controller
         $parts = [];
 
         $lwop = (float) $row->absent_without_leave_days;
-        if ($lwop > 0) {
+        $absent = (float) $row->absent_without_leave_days;
+        if ($absent > 0) {
+            $notes = [];
+            if ($type === 'vl' && (float) ($row->absence_credits ?? 0) > 0) {
+                $notes[] = '−' . $num($row->absence_credits) . ' VL';
+            }
+            if ((float) ($row->absence_lwop_days ?? 0) > 0) {
+                $notes[] = $num($row->absence_lwop_days) . ' unpaid';
+            }
             $earned = (float) ($type === 'vl' ? $row->vl_earned : $row->sl_earned);
-            $parts[] = $num($lwop) . ' day(s) absent w/o leave'
-                . ($earned < LeaveAccrualService::MONTHLY ? ' (earned ' . number_format($earned, 3) . ')' : '');
+            if ($earned < LeaveAccrualService::MONTHLY) {
+                $notes[] = 'earned ' . number_format($earned, 3);
+            }
+            $parts[] = $num($absent) . ' day(s) absent w/o leave'
+                . ($notes ? ' (' . implode('; ', $notes) . ')' : '');
         }
 
         // Tardiness only affects VL
@@ -805,17 +816,23 @@ class EmployeeController extends Controller
             ];
         }
 
-        // DTR upload: casual-LWOP reduction (negative earned) and, for VL, tardiness
         foreach ($attendanceRows as $row) {
             $reduction = round((float) ($type === 'vl' ? $row->vl_earned : $row->sl_earned) - LeaveAccrualService::MONTHLY, 3);
             $tardiness = $type === 'vl'
                 ? round((float) $row->tardiness_equivalent_days - (float) $row->lwop_days, 3)
                 : 0;
 
+            // Absences without leave: charged to VL where the balance covered
+            // them; the rest stayed unpaid
+            $absent       = (float) $row->absent_without_leave_days;
+            $absentUnpaid = (float) ($row->absence_lwop_days ?? 0);
+            $absenceUsed  = $type === 'vl' ? (float) ($row->absence_credits ?? 0) : 0;
+            $absentPaid   = $type === 'vl' ? max(0, $absent - $absentUnpaid) : 0;
+
             // Nothing to show for this leave type
             if (
-                $reduction == 0 && $tardiness == 0
-                && (float) $row->absent_without_leave_days == 0
+                $reduction == 0 && $tardiness == 0 && $absenceUsed == 0
+                && $absent == 0
                 && (float) $row->absent_with_leave_days == 0
             ) {
                 continue;
@@ -828,9 +845,9 @@ class EmployeeController extends Controller
                 'period'      => $uploaded->format('M j, Y'),
                 'particulars' => $this->monthlyParticulars($row, $type),
                 'earned'      => $reduction,
-                'abs_wp'      => (float) $row->absent_with_leave_days,
-                'abs_wop'     => (float) $row->absent_without_leave_days,
-                'used'        => $tardiness,
+                'abs_wp'      => (float) $row->absent_with_leave_days + $absentPaid,
+                'abs_wop'     => $absentUnpaid,
+                'used'        => round($tardiness + $absenceUsed, 3),
             ];
         }
         if ($config) {
