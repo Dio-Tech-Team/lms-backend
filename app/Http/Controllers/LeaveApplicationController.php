@@ -1112,6 +1112,9 @@ class LeaveApplicationController extends Controller
             'no_pay_days' => $leaveRecord->no_pay_days ?? 0,
 
             'vl_total'    => number_format($vlTotal, 3, '.', ''),
+            // Credits actually charged for this application, so the column adds up
+            'vl_less'     => number_format($vlTotal - $vlBalance, 3, '.', ''),
+            'sl_less'     => number_format($slTotal - $slBalance, 3, '.', ''),
             'vl_balance'  => number_format($vlBalance, 3, '.', ''),
             'sl_total'    => number_format($slTotal, 3, '.', ''),
             'sl_balance'  => number_format($slBalance, 3, '.', ''),

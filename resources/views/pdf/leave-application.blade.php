@@ -402,8 +402,8 @@
                     </tr>
                     <tr>
                         <td class="label">Less this application</td>
-                        <td class="num">{{ $deductsFromVl ? $three($application->days_applied) : '' }}</td>
-                        <td class="num">{{ $deductsFromSl ? $three($application->days_applied) : '' }}</td>
+                        <td class="num">{{ $deductsFromVl && (float) $vl_less > 0 ? $vl_less : '' }}</td>
+                        <td class="num">{{ $deductsFromSl && (float) $sl_less > 0 ? $sl_less : '' }}</td>
                     </tr>
                     <tr>
                         <td class="label">Balance</td>
