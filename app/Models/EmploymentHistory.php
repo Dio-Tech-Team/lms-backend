@@ -18,6 +18,14 @@ class EmploymentHistory extends Model
         'new_employment_status',
         'effective_date', // Synced with migration
         'remarks',
+        'gap_days',
+        'credits_lost',
+    ];
+
+    protected $casts = [
+        'effective_date' => 'date:Y-m-d',
+        'gap_days'       => 'integer',
+        'credits_lost'   => 'float',
     ];
 
     public function employee()

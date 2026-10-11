@@ -36,10 +36,12 @@ class Employee extends Model
         'retirement_type',
         'position',
         'date_hired',
+        'appointment_end',
         'is_active',
     ];
     protected $casts = [
         'date_hired' => 'date:Y-m-d',
+        'appointment_end' => 'date:Y-m-d',
         'birthdate'  => 'date:Y-m-d',
         'is_active'  => 'boolean',
     ];

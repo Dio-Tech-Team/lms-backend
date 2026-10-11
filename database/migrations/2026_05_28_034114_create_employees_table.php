@@ -47,6 +47,8 @@ return new class extends Migration
             $table->enum('retirement_type', ['mandatory', 'optional'])->nullable();
             $table->string('position');
             $table->date('date_hired');
+            // Casual only: end of the current appointment, from the appointment paper
+            $table->date('appointment_end')->nullable();
             // $table->boolean('is_active')->default(true);
             $table->boolean('is_active')->default(true)->index();
             $table->timestamps();

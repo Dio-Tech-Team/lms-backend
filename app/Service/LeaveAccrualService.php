@@ -100,6 +100,16 @@ class LeaveAccrualService
             $date = $hired->copy()->addMonthsNoOverflow($n);
             if ($date->gt($today)) break;
 
+            // Casual whose appointment ended before this month closed: hold the
+            // credit until HR records the renewal (it then posts on this same date)
+            if (
+                $employee->employment_status === 'casual'
+                && $employee->appointment_end
+                && Carbon::parse($employee->appointment_end)->lt($date->copy()->subDay())
+            ) {
+                break;
+            }
+
             if ($date->gt($after) && $this->post($employee, $date)) {
                 $posted++;
             }
@@ -107,6 +117,42 @@ class LeaveAccrualService
         }
 
         return $posted;
+    }
+
+    /**
+     * Credit for the month this date closes. A casual with days in that
+     * month without appointment (late renewal) earns per the CSC table:
+     * 30 − gap days present. Everyone else earns the full 1.250.
+     */
+    private function earnedFor(Employee $employee, Carbon $date): float
+    {
+        if ($employee->employment_status !== 'casual') return self::MONTHLY;
+
+        // The month this credit covers: one month back up to the day before
+        $periodStart = $date->copy()->subMonthNoOverflow();
+        $periodEnd   = $date->copy()->subDay();
+
+        $gapDays = 0;
+        $renewals = EmploymentHistory::where('employee_id', $employee->id)
+            ->where('gap_days', '>', 0)
+            ->get(['effective_date', 'gap_days']);
+
+        foreach ($renewals as $r) {
+            // Gap = the gap_days just before the renewal date
+            $gapEnd   = Carbon::parse($r->effective_date)->startOfDay()->subDay();
+            $gapStart = $gapEnd->copy()->subDays($r->gap_days - 1);
+
+            $from = $gapStart->gt($periodStart) ? $gapStart : $periodStart;
+            $to   = $gapEnd->lt($periodEnd) ? $gapEnd : $periodEnd;
+
+            if ($from->lte($to)) {
+                $gapDays += (int) $from->diffInDays($to) + 1;
+            }
+        }
+
+        if ($gapDays === 0) return self::MONTHLY;
+
+        return app(LeaveCreditComputationService::class)->getLeaveCredit(max(0, 30 - $gapDays));
     }
 
     private function post(Employee $employee, Carbon $date): bool
@@ -121,13 +167,15 @@ class LeaveAccrualService
         // Year not initialized yet — left unrecorded, so it posts on a later run
         if (!$hasRows) return false;
 
-        return DB::transaction(function () use ($employee, $date, $year) {
+        $earned = $this->earnedFor($employee, $date);
+
+        return DB::transaction(function () use ($employee, $date, $year, $earned) {
             $inserted = LeaveAccrual::insertOrIgnore([
                 'employee_id'   => $employee->id,
                 'accrual_month' => $date->copy()->startOfMonth()->toDateString(),
                 'accrual_date'  => $date->toDateString(),
-                'vl_earned'     => self::MONTHLY,
-                'sl_earned'     => self::MONTHLY,
+                'vl_earned'     => $earned,
+                'sl_earned'     => $earned,
                 'created_at'    => now(),
                 'updated_at'    => now(),
             ]);
@@ -141,7 +189,7 @@ class LeaveAccrualService
                     ->lockForUpdate()
                     ->first();
 
-                $credit->total_credits = round((float) $credit->total_credits + self::MONTHLY, 3);
+                $credit->total_credits = round((float) $credit->total_credits + $earned, 3);
                 $credit->last_updated  = now();
                 $credit->save(); // saving hook recomputes balance, saved hook syncs carry-over
             }

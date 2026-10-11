@@ -39,6 +39,9 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('employees/{id}/leave-card', [EmployeeController::class, 'leaveCard']);
     Route::get('/employees/{id}/leave-card/pdf', [EmployeeController::class, 'leaveCardPdf']);
     Route::get('employees', [EmployeeController::class, 'index']);
+    // Above employees/{id}, or "appointments-due" is read as an id
+    Route::get('employees/appointments-due', [EmployeeController::class, 'appointmentsDue'])
+        ->middleware('role:super_admin,hr_admin');
     Route::get('employees/{id}', [EmployeeController::class, 'show']);
 
     Route::put('/profile', [EmployeeController::class, 'updateOwnProfile']);
@@ -83,6 +86,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::delete('employees/{id}', [EmployeeController::class, 'destroy']);
         Route::post('employees/{id}/resign', [EmployeeController::class, 'resign']);
         Route::post('employees/{id}/rehire', [EmployeeController::class, 'rehire']);
+        Route::post('employees/{id}/renew', [EmployeeController::class, 'renew']);
         Route::post('/employees/{id}/retire', [EmployeeController::class, 'retire']);
 
         // Signatories

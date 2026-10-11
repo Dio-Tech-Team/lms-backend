@@ -159,6 +159,7 @@ class EmployeeController extends Controller
             'department_id'                    => 'required|exists:departments,id',
             'date_hired' => 'required|date|before_or_equal:today',
             'schedule_type'                    => 'nullable|in:4day,5day',
+            'appointment_end'                  => 'required_if:employment_status,casual|nullable|date|after:date_hired',
         ]);
 
         // Authorization check before DB transaction
@@ -203,6 +204,7 @@ class EmployeeController extends Controller
                 'position'                           => $request->position,
                 'date_hired'                         => $request->date_hired,
                 'schedule_type'                      => $request->schedule_type ?? '4day',
+                'appointment_end'                    => $request->employment_status === 'casual' ? $request->appointment_end : null,
             ]);
             EmploymentHistory::create([
                 'employee_id'                  => $employee->id,
@@ -280,6 +282,7 @@ class EmployeeController extends Controller
             'employees.position',
             'employees.date_hired',
             'employees.schedule_type',
+            'employees.appointment_end',
             'employees.is_active',
             'users.username',
             'users.email',
@@ -297,7 +300,9 @@ class EmployeeController extends Controller
                         'previous_employment_status',
                         'new_employment_status',
                         'effective_date',
-                        'remarks'
+                        'remarks',
+                        'gap_days',
+                        'credits_lost'
                     )->orderBy('effective_date', 'desc')
                         ->orderBy('id', 'desc');
                 }
@@ -342,6 +347,7 @@ class EmployeeController extends Controller
             'department'                     => $employee->department_name,
             'date_hired'                     => $employee->date_hired,
             'schedule_type'                  => $employee->schedule_type,
+            'appointment_end'                => $employee->appointment_end,
             'employment_history'             => $employee->employment_history,
             'step_increment'                 => $stepIncrementInfo,
             'loyalty_pay'                    => $loyaltyPayInfo,
@@ -386,6 +392,7 @@ class EmployeeController extends Controller
             'position' => 'sometimes|string|exists:positions,title',
             'date_hired' => 'sometimes|date|before_or_equal:today',
             'schedule_type'                    => 'sometimes|in:4day,5day',
+            'appointment_end'                  => 'sometimes|nullable|date',
         ]);
 
 
@@ -808,13 +815,17 @@ class EmployeeController extends Controller
             $entries[] = [
                 'sort_date'   => $date,
                 'period'      => $date->format('M j, Y'),
-                'particulars' => 'Monthly credit',
+                'particulars' => (float) $acc->vl_earned < LeaveAccrualService::MONTHLY
+                    ? 'Monthly credit (reduced: days without appointment)'
+                    : 'Monthly credit',
                 'earned'      => round((float) ($type === 'vl' ? $acc->vl_earned : $acc->sl_earned), 3),
                 'abs_wp'      => 0,
                 'abs_wop'     => 0,
                 'used'        => 0,
             ];
         }
+
+
 
         foreach ($attendanceRows as $row) {
             $reduction = round((float) ($type === 'vl' ? $row->vl_earned : $row->sl_earned) - LeaveAccrualService::MONTHLY, 3);
@@ -1271,6 +1282,7 @@ class EmployeeController extends Controller
             'department_id'      => 'sometimes|exists:departments,id',
             'effective_date'     => 'required|date',
             'remarks'            => 'nullable|string',
+            'appointment_end'    => 'required_if:employment_status,casual|nullable|date|after:effective_date',
         ]);
 
         $employee = Employee::findOrFail($id);
@@ -1295,6 +1307,7 @@ class EmployeeController extends Controller
                 'position'           => $request->position,
                 'department_id'      => $request->department_id ?? $employee->department_id,
                 'is_active'          => true,
+                'appointment_end'    => $request->employment_status === 'casual' ? $request->appointment_end : null,
             ]);
 
             // Re-initialize leave credits for the current year, same as a fresh hire
@@ -1311,6 +1324,101 @@ class EmployeeController extends Controller
         });
 
         return response()->json(['message' => 'Employee rehired successfully']);
+    }
+
+    /**
+     * Renew a casual appointment. A renewal dated after the old end date
+     * leaves a gap without appointment; that month's credit is reduced
+     * with the CSC table (30 − gap days present), on VL and SL each.
+     */
+    public function renew(Request $request, string $id)
+    {
+        $validated = $request->validate([
+            'renewal_date'    => 'required|date',
+            'appointment_end' => 'required|date|after:renewal_date',
+            'remarks'         => 'nullable|string|max:500',
+        ]);
+
+        $employee = Employee::findOrFail($id);
+
+        if ($employee->employment_status !== 'casual' || !$employee->is_active) {
+            return response()->json(['message' => 'Only active casual employees can be renewed.'], 422);
+        }
+
+        $oldEnd   = $employee->appointment_end ? Carbon::parse($employee->appointment_end)->startOfDay() : null;
+        $renewal  = Carbon::parse($validated['renewal_date'])->startOfDay();
+        $gapStart = $oldEnd?->copy()->addDay();
+
+        // Days with no appointment: day after the old end up to the day before renewal
+        $gap = ($gapStart && $renewal->gt($gapStart)) ? (int) $gapStart->diffInDays($renewal) : 0;
+
+        // Lost per VL and SL: 1.250 for each full 30 days, table amount for the rest
+        $rest = $gap % 30;
+        $lost = intdiv($gap, 30) * LeaveAccrualService::MONTHLY;
+        if ($rest > 0) {
+            $lost += LeaveAccrualService::MONTHLY
+                - app(\App\Service\LeaveCreditComputationService::class)->getLeaveCredit(30 - $rest);
+        }
+        $lost = round($lost, 3);
+
+        DB::transaction(function () use ($employee, $validated, $renewal, $gap, $lost, $request) {
+            EmploymentHistory::create([
+                'employee_id'                => $employee->id,
+                'previous_position'          => $employee->position,
+                'new_position'               => $employee->position,
+                'previous_employment_status' => 'casual',
+                'new_employment_status'      => 'casual',
+                'effective_date'             => $renewal->toDateString(),
+                'remarks'                    => $validated['remarks']
+                    ?? ($gap > 0
+                        ? "Casual appointment renewed late ({$gap} day(s) without appointment)"
+                        : 'Casual appointment renewed'),
+                'gap_days'                   => $gap,
+                'credits_lost'               => $lost,
+            ]);
+
+            $employee->update(['appointment_end' => $validated['appointment_end']]);
+
+            ActivityLog::create([
+                'user_id'      => $request->user()->id,
+                'action'       => 'employee.renewed',
+                'description'  => "Renewed casual appointment of {$employee->first_name} {$employee->surname} until {$validated['appointment_end']}"
+                    . ($gap > 0 ? " ({$gap} day(s) late; that month's credit reduced by {$lost})" : ''),
+                'subject_type' => 'Employee',
+                'subject_id'   => $employee->id,
+            ]);
+        });
+
+        return response()->json([
+            'message'      => $gap > 0
+                ? "Appointment renewed. {$gap} day(s) without appointment: that month's credit will be {$lost} lower on VL and SL."
+                : 'Appointment renewed.',
+            'gap_days'     => $gap,
+            'credits_lost' => $lost,
+        ]);
+    }
+
+    // Casual appointments ending within 30 days, plus any already expired
+    public function appointmentsDue()
+    {
+        $today = Carbon::parse(now('Asia/Manila')->toDateString());
+
+        $rows = Employee::where('is_active', true)
+            ->where('employment_status', 'casual')
+            ->whereNotNull('appointment_end')
+            ->whereDate('appointment_end', '<=', $today->copy()->addDays(30))
+            ->with('department:id,name')
+            ->orderBy('appointment_end')
+            ->get(['id', 'first_name', 'surname', 'department_id', 'appointment_end'])
+            ->map(fn($e) => [
+                'id'              => $e->id,
+                'name'            => "{$e->surname}, {$e->first_name}",
+                'department'      => $e->department?->name,
+                'appointment_end' => $e->appointment_end->toDateString(),
+                'expired'         => $e->appointment_end->lt($today),
+            ]);
+
+        return response()->json($rows);
     }
 
     public function destroy(string $id)

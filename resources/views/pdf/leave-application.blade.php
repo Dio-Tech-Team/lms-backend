@@ -413,7 +413,7 @@
                 </table>
 
                 <div class="sig-line">{{ $signatories['hr_officer'] ?? '' }}</div>
-                <div class="sig-label">{{ $positions['hr_officer'] ?? 'HR Officer' }}</div>
+                <div class="sig-label">{{ $positions['hr_officer'] ?? 'MHRMO' }}</div>
             </td>
             <td style="width:50%;">
                 <strong>7.B RECOMMENDATION</strong><br>
