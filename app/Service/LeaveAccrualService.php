@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Models\Employee;
+use App\Models\EmploymentHistory;
 use App\Models\LeaveAccrual;
 use App\Models\LeaveConfiguration;
 use App\Models\LeaveCredit;
@@ -79,6 +80,14 @@ class LeaveAccrualService
         $floor = Carbon::create($firstYear, 1, 1)->subDay();
         if ($floor->gt($after)) {
             $after = $floor;
+        }
+
+        // Rehired: no credits for the months spent resigned
+        $rehiredOn = EmploymentHistory::where('employee_id', $employee->id)
+            ->where('previous_employment_status', 'resigned')
+            ->max('effective_date');
+        if ($rehiredOn && Carbon::parse($rehiredOn)->startOfDay()->gt($after)) {
+            $after = Carbon::parse($rehiredOn)->startOfDay();
         }
 
         // Jump straight to the month of $after instead of looping from the hire date
