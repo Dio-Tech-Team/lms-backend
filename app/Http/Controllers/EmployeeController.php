@@ -303,7 +303,14 @@ class EmployeeController extends Controller
                         'remarks',
                         'gap_days',
                         'credits_lost'
-                    )->orderBy('effective_date', 'desc')
+                    )
+                        // Hide casual renewals (casual → casual, same position); kept for credit computation
+                        ->where(function ($q) {
+                            $q->whereNull('previous_employment_status')
+                                ->orWhereColumn('previous_employment_status', '!=', 'new_employment_status')
+                                ->orWhereColumn('previous_position', '!=', 'new_position');
+                        })
+                        ->orderBy('effective_date', 'desc')
                         ->orderBy('id', 'desc');
                 }
             ])
@@ -843,7 +850,7 @@ class EmployeeController extends Controller
             // Nothing to show for this leave type
             if (
                 $reduction == 0 && $tardiness == 0 && $absenceUsed == 0
-                && $absent == 0
+                && ($type === 'sl' || $absent == 0)
                 && (float) $row->absent_with_leave_days == 0
             ) {
                 continue;
@@ -993,7 +1000,7 @@ class EmployeeController extends Controller
                     foreach ($entries as &$e) {
                         if (
                             $e['particulars'] !== 'Transferred from physical leave card'
-                            && $e['sort_date']->lt($asOfDate)
+                            && $e['sort_date']->lte($asOfDate)
                         ) {
                             $e['sort_date'] = $asOfDate->copy()->addSecond();
                         }
@@ -1282,7 +1289,7 @@ class EmployeeController extends Controller
             'department_id'      => 'sometimes|exists:departments,id',
             'effective_date'     => 'required|date',
             'remarks'            => 'nullable|string',
-            'appointment_end'    => 'required_if:employment_status,casual|nullable|date|after:effective_date',
+            'appointment_end'    => 'required_if:employment_status,casual|nullable|date|after_or_equal:effective_date',
         ]);
 
         $employee = Employee::findOrFail($id);
@@ -1331,11 +1338,16 @@ class EmployeeController extends Controller
      * leaves a gap without appointment; that month's credit is reduced
      * with the CSC table (30 − gap days present), on VL and SL each.
      */
+    /**
+     * Renew a casual appointment. A renewal dated after the old end date
+     * leaves a gap without appointment; that month's credit is reduced
+     * with the CSC table (30 − gap days present), on VL and SL each.
+     */
     public function renew(Request $request, string $id)
     {
         $validated = $request->validate([
             'renewal_date'    => 'required|date',
-            'appointment_end' => 'required|date|after:renewal_date',
+            'appointment_end' => 'required|date|after_or_equal:renewal_date',
             'remarks'         => 'nullable|string|max:500',
         ]);
 
@@ -1345,8 +1357,76 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'Only active casual employees can be renewed.'], 422);
         }
 
+        $r = DB::transaction(fn() => $this->renewOne(
+            $employee,
+            $validated['renewal_date'],
+            $validated['appointment_end'],
+            $validated['remarks'] ?? null,
+            $request->user()->id
+        ));
+
+        return response()->json([
+            'message'      => $r['gap'] > 0
+                ? "Appointment renewed. {$r['gap']} day(s) without appointment: that month's credit will be {$r['lost']} lower on VL and SL."
+                : 'Appointment renewed.',
+            'gap_days'     => $r['gap'],
+            'credits_lost' => $r['lost'],
+        ]);
+    }
+
+    /**
+     * Renew several casual employees with the same effectivity date and end.
+     * Each gap is still counted from that employee's own old end date.
+     */
+    public function renewBulk(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_ids'    => 'required|array|min:1',
+            'employee_ids.*'  => 'integer|exists:employees,id',
+            'renewal_date'    => 'required|date',
+            'appointment_end' => 'required|date|after_or_equal:renewal_date',
+        ]);
+
+        $employees = Employee::whereIn('id', $validated['employee_ids'])
+            ->where('employment_status', 'casual')
+            ->where('is_active', true)
+            ->get();
+
+        $late = [];
+        DB::transaction(function () use ($employees, $validated, $request, &$late) {
+            foreach ($employees as $employee) {
+                $r = $this->renewOne(
+                    $employee,
+                    $validated['renewal_date'],
+                    $validated['appointment_end'],
+                    null,
+                    $request->user()->id
+                );
+                if ($r['gap'] > 0) {
+                    $late[] = "{$employee->surname}, {$employee->first_name} ({$r['gap']} day(s))";
+                }
+            }
+        });
+
+        $count   = $employees->count();
+        $message = "{$count} appointment(s) renewed until "
+            . Carbon::parse($validated['appointment_end'])->format('M j, Y') . '.';
+        if ($late) {
+            $message .= ' Late renewal, credit reduced: ' . implode('; ', $late) . '.';
+        }
+
+        return response()->json([
+            'message' => $message,
+            'renewed' => $count,
+            'late'    => $late,
+        ]);
+    }
+
+    // Shared by renew() and renewBulk(); call inside a transaction
+    private function renewOne(Employee $employee, string $renewalDate, string $appointmentEnd, ?string $remarks, int $userId): array
+    {
         $oldEnd   = $employee->appointment_end ? Carbon::parse($employee->appointment_end)->startOfDay() : null;
-        $renewal  = Carbon::parse($validated['renewal_date'])->startOfDay();
+        $renewal  = Carbon::parse($renewalDate)->startOfDay();
         $gapStart = $oldEnd?->copy()->addDay();
 
         // Days with no appointment: day after the old end up to the day before renewal
@@ -1361,43 +1441,34 @@ class EmployeeController extends Controller
         }
         $lost = round($lost, 3);
 
-        DB::transaction(function () use ($employee, $validated, $renewal, $gap, $lost, $request) {
-            EmploymentHistory::create([
-                'employee_id'                => $employee->id,
-                'previous_position'          => $employee->position,
-                'new_position'               => $employee->position,
-                'previous_employment_status' => 'casual',
-                'new_employment_status'      => 'casual',
-                'effective_date'             => $renewal->toDateString(),
-                'remarks'                    => $validated['remarks']
-                    ?? ($gap > 0
-                        ? "Casual appointment renewed late ({$gap} day(s) without appointment)"
-                        : 'Casual appointment renewed'),
-                'gap_days'                   => $gap,
-                'credits_lost'               => $lost,
-            ]);
-
-            $employee->update(['appointment_end' => $validated['appointment_end']]);
-
-            ActivityLog::create([
-                'user_id'      => $request->user()->id,
-                'action'       => 'employee.renewed',
-                'description'  => "Renewed casual appointment of {$employee->first_name} {$employee->surname} until {$validated['appointment_end']}"
-                    . ($gap > 0 ? " ({$gap} day(s) late; that month's credit reduced by {$lost})" : ''),
-                'subject_type' => 'Employee',
-                'subject_id'   => $employee->id,
-            ]);
-        });
-
-        return response()->json([
-            'message'      => $gap > 0
-                ? "Appointment renewed. {$gap} day(s) without appointment: that month's credit will be {$lost} lower on VL and SL."
-                : 'Appointment renewed.',
-            'gap_days'     => $gap,
-            'credits_lost' => $lost,
+        EmploymentHistory::create([
+            'employee_id'                => $employee->id,
+            'previous_position'          => $employee->position,
+            'new_position'               => $employee->position,
+            'previous_employment_status' => 'casual',
+            'new_employment_status'      => 'casual',
+            'effective_date'             => $renewal->toDateString(),
+            'remarks'                    => $remarks
+                ?? ($gap > 0
+                    ? "Casual appointment renewed late ({$gap} day(s) without appointment)"
+                    : 'Casual appointment renewed'),
+            'gap_days'                   => $gap,
+            'credits_lost'               => $lost,
         ]);
-    }
 
+        $employee->update(['appointment_end' => $appointmentEnd]);
+
+        ActivityLog::create([
+            'user_id'      => $userId,
+            'action'       => 'employee.renewed',
+            'description'  => "Renewed casual appointment of {$employee->first_name} {$employee->surname} until {$appointmentEnd}"
+                . ($gap > 0 ? " ({$gap} day(s) late; that month's credit reduced by {$lost})" : ''),
+            'subject_type' => 'Employee',
+            'subject_id'   => $employee->id,
+        ]);
+
+        return ['gap' => $gap, 'lost' => $lost];
+    }
     // Casual appointments ending within 30 days, plus any already expired
     public function appointmentsDue()
     {

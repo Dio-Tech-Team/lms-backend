@@ -386,7 +386,7 @@
                 <strong>7.A CERTIFICATION OF LEAVE CREDITS</strong>
                 <div class="center" style="margin-top:4px;">
                     As of <span class="fill"
-                        style="min-width:130px;">{{ now()->timezone('Asia/Manila')->format('F d, Y') }}</span>
+                        style="min-width:130px;">{{ $as_of ?? now()->timezone('Asia/Manila')->format('F d, Y') }}</span>
                 </div>
 
                 <table class="credits">

@@ -1103,6 +1103,25 @@ class LeaveApplicationController extends Controller
             }
         }
 
+        // 7.A "As of": the last credit posted on or before filing (monthly
+        // credit or the paper-card transfer), else the filing date
+        $filed = Carbon::parse($application->applied_at ?? $application->created_at)->timezone('Asia/Manila')->endOfDay();
+
+        $lastAccrual = \App\Models\LeaveAccrual::where('employee_id', $application->employee_id)
+            ->whereDate('accrual_date', '<=', $filed)
+            ->max('accrual_date');
+
+        $openingDate = LeaveCredit::where('employee_id', $application->employee_id)
+            ->whereIn('leave_configuration_id', $configs->pluck('id'))
+            ->whereNotNull('opening_balance_date')
+            ->whereDate('opening_balance_date', '<=', $filed)
+            ->max('opening_balance_date');
+
+        $asOfCandidates = array_filter([$lastAccrual, $openingDate]);
+        $asOf = $asOfCandidates
+            ? Carbon::parse(max($asOfCandidates))
+            : $filed;
+
         $signatories = Signatory::pluck('name', 'role');
         $positions   = Signatory::pluck('position', 'role');
 
@@ -1118,7 +1137,7 @@ class LeaveApplicationController extends Controller
             'vl_balance'  => number_format($vlBalance, 3, '.', ''),
             'sl_total'    => number_format($slTotal, 3, '.', ''),
             'sl_balance'  => number_format($slBalance, 3, '.', ''),
-
+            'as_of'       => $asOf->format('F j, Y'),
             'signatories' => $signatories,
             'positions'   => $positions,
         ];

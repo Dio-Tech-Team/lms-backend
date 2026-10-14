@@ -81,6 +81,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         // Employees
         Route::post('employees', [EmployeeController::class, 'store']);
         Route::post('employees/bulk-schedule', [EmployeeController::class, 'bulkSchedule']);
+        Route::post('employees/renew-bulk', [EmployeeController::class, 'renewBulk']);
         Route::put('employees/{id}', [EmployeeController::class, 'update']);
         Route::patch('employees/{id}', [EmployeeController::class, 'update']);
         Route::delete('employees/{id}', [EmployeeController::class, 'destroy']);
