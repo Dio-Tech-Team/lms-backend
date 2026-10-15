@@ -272,6 +272,11 @@ class LeaveCreditController extends Controller
     public function initializeAllCredits(Request $request)
     {
         $targetYear = (int) $request->input('year', now()->year);
+        if ($targetYear > now()->year) {
+            return response()->json([
+                'message' => "Credits for {$targetYear} can only be initialized starting January 1, {$targetYear}, after the previous year's balances are final."
+            ], 422);
+        }
         $result = $this->initializeYear($targetYear, $request->user()->id);
 
         $message = $result['initialized'] === 0
@@ -377,7 +382,13 @@ class LeaveCreditController extends Controller
 
     public function initializeCredits(Request $request, $employeeId)
     {
-        $this->initializeSingleEmployeeCredits($employeeId, $request->input('year', now()->year));
+        $year = (int) $request->input('year', now()->year);
+        if ($year > now()->year) {
+            return response()->json([
+                'message' => "Credits for {$year} can only be initialized starting January 1, {$year}."
+            ], 422);
+        }
+        $this->initializeSingleEmployeeCredits($employeeId, $year);
 
         return response()->json(['message' => 'Leave credits initialized successfully']);
     }
