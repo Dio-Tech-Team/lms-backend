@@ -22,10 +22,13 @@ use App\Http\Controllers\{
     SlipController
 };
 
-Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
-Route::middleware('throttle:5,1')->post('/verify-otp', [AuthController::class, 'verifyOtp']);
-Route::middleware('throttle:5,1')->post('/resend-otp', [AuthController::class, 'resendOtp']);
+// Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
+// Route::middleware('throttle:5,1')->post('/verify-otp', [AuthController::class, 'verifyOtp']);
+// Route::middleware('throttle:5,1')->post('/resend-otp', [AuthController::class, 'resendOtp']);
 
+Route::middleware('throttle:login')->post('/login', [AuthController::class, 'login']);
+Route::middleware('throttle:otp')->post('/verify-otp', [AuthController::class, 'verifyOtp']);
+Route::middleware('throttle:otp')->post('/resend-otp', [AuthController::class, 'resendOtp']);
 // 2. AUTHENTICATED ROUTES
 Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
