@@ -51,6 +51,7 @@ class LeaveCreditController extends Controller
             'leave_credits.year',
             'leave_configurations.name as leave_type',
             'leave_configurations.code',
+            'leave_configurations.grant_type',
         ])
             ->join('leave_configurations', 'leave_credits.leave_configuration_id', '=', 'leave_configurations.id')
             ->where('leave_credits.employee_id', $employeeId)
@@ -378,6 +379,50 @@ class LeaveCreditController extends Controller
             'message' => "{$config->name} granted successfully",
             'data'    => $credit,
         ], 201);
+    }
+    
+    public function revokeGrant(Request $request, $creditId)
+    {
+        $credit = LeaveCredit::with('leaveConfiguration')->findOrFail($creditId);
+        $config = $credit->leaveConfiguration;
+
+        if (!$config || $config->grant_type !== 'event_manual') {
+            return response()->json(['message' => 'Only manually granted leave types can be revoked.'], 422);
+        }
+
+        if ((float) $credit->used_credits > 0) {
+            return response()->json([
+                'message' => "This {$config->name} grant has already been used and can no longer be revoked. Cancel the approved application instead.",
+            ], 422);
+        }
+
+        $hasPending = \App\Models\LeaveApplication::where('employee_id', $credit->employee_id)
+            ->where('leave_configuration_id', $config->id)
+            ->where('status', 'pending')
+            ->whereYear('start_date', $credit->year)
+            ->exists();
+
+        if ($hasPending) {
+            return response()->json([
+                'message' => "There is a pending {$config->name} application. Reject or cancel it before revoking the grant.",
+            ], 422);
+        }
+
+        $employee = Employee::find($credit->employee_id);
+
+        DB::transaction(function () use ($credit, $config, $employee, $request) {
+            ActivityLog::create([
+                'user_id'      => $request->user()->id,
+                'action'       => 'leave_credit.grant_revoked',
+                'description'  => "Revoked {$credit->total_credits} day(s) of {$config->name} from {$employee?->first_name} {$employee?->surname} for {$credit->year}",
+                'subject_type' => 'LeaveCredit',
+                'subject_id'   => $credit->id,
+            ]);
+
+            $credit->delete();
+        });
+
+        return response()->json(['message' => "{$config->name} grant revoked."]);
     }
 
     public function initializeCredits(Request $request, $employeeId)
