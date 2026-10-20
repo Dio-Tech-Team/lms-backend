@@ -64,6 +64,7 @@ return [
     | is set to "UTC" by default as it is suitable for most use cases.
     |
     */
+    'api_rate_limit' => (int) env('API_RATE_LIMIT', 60),
 
     'timezone' => 'UTC',
 

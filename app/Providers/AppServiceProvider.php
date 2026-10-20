@@ -38,7 +38,8 @@ class AppServiceProvider extends ServiceProvider
 
         // Authenticated API: 60 requests per minute per user
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            // return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            return Limit::perMinute(config('app.api_rate_limit'))->by($request->user()?->id ?: $request->ip());
         });
 
         Mail::extend('brevo', function (array $config) {
